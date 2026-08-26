@@ -99,6 +99,15 @@ public class CourseController {
     }
 
     /**
+     * DELETE /courses/internal/{id}/enrollment-count - 수강생 수 감소 (Enrollment Service 예매 취소 시 호출)
+     */
+    @DeleteMapping("/internal/{id}/enrollment-count")
+    public ResponseEntity<Void> decreaseEnrollmentCount(@PathVariable Long id) {
+        courseService.decreaseEnrollmentCount(id);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * GET /courses/internal/recommend - 추천 서비스용 미수강 강의 조회
      * category: 카테고리, excludeIds: 이미 수강한 강의 ID 목록
      */

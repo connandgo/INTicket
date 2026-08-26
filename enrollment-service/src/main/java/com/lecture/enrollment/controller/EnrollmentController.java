@@ -46,6 +46,19 @@ public class EnrollmentController {
     }
 
     /**
+     * DELETE /enrollments/{id} - 예매 취소
+     * Gateway에서 X-User-Id 헤더로 사용자 ID 전달, 본인 예매만 취소 가능
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<EnrollmentDto.ApiResponse<Void>> cancelEnrollment(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId) {
+
+        enrollmentService.cancelEnrollment(userId, id);
+        return ResponseEntity.ok(EnrollmentDto.ApiResponse.<Void>success(null));
+    }
+
+    /**
      * GET /enrollments/user/{userId} - 특정 사용자 수강 목록 조회
      */
     @GetMapping("/user/{userId}")

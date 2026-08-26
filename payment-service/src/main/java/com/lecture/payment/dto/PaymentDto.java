@@ -73,6 +73,16 @@ public class PaymentDto {
         private String status;
     }
 
+    // 내부 서비스 결제 취소 요청 (Enrollment Service → Payment Service)
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class InternalCancelRequest {
+        private Long userId;
+        private Long courseId;
+    }
+
     // 공통 API 응답 래퍼
     @Getter
     @NoArgsConstructor

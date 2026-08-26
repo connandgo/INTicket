@@ -76,6 +76,15 @@ public class CourseService {
     }
 
     /**
+     * 수강생 수 감소 (Enrollment Service 예매 취소 시 호출)
+     */
+    @Transactional
+    public void decreaseEnrollmentCount(Long courseId) {
+        Course course = findCourseById(courseId);
+        course.decreaseEnrollmentCount();
+    }
+
+    /**
      * 추천 서비스용: 카테고리별 미수강 강의 조회
      * - excludeCourseIds: 이미 수강한 강의 ID 목록
      */

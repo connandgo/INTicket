@@ -42,6 +42,38 @@ public class PaymentServiceClient {
         }
     }
 
+    /**
+     * Payment Service: 결제 취소 요청 (동기 REST)
+     */
+    public void cancelPayment(Long userId, Long courseId) {
+        try {
+            webClientBuilder.build()
+                    .post()
+                    .uri("http://payment-service:8084/api/payments/internal/cancel")
+                    .bodyValue(new CancelRequest(userId, courseId))
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+
+            log.info("[PaymentServiceClient] 결제 취소 완료 - userId: {}, courseId: {}", userId, courseId);
+        } catch (Exception e) {
+            log.error("[PaymentServiceClient] 결제 취소 실패 - userId: {}, courseId: {}, error: {}",
+                    userId, courseId, e.getMessage());
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    static class CancelRequest {
+        private Long userId;
+        private Long courseId;
+
+        CancelRequest(Long userId, Long courseId) {
+            this.userId = userId;
+            this.courseId = courseId;
+        }
+    }
+
     @Getter
     @NoArgsConstructor
     static class PaymentRequest {

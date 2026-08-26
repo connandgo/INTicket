@@ -106,4 +106,23 @@ public class CourseServiceClient {
                     courseId, e.getMessage());
         }
     }
+
+    /**
+     * Course Service: 수강생 수 감소 (예매 취소 시 호출)
+     */
+    public void decreaseEnrollmentCount(Long courseId) {
+        try {
+            webClientBuilder.build()
+                    .method(org.springframework.http.HttpMethod.DELETE)
+                    .uri("http://course-service/api/courses/internal/{id}/enrollment-count", courseId)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
+
+            log.info("[CourseServiceClient] 수강생 수 감소 완료 - courseId: {}", courseId);
+        } catch (Exception e) {
+            log.error("[CourseServiceClient] 수강생 수 감소 실패 - courseId: {}, error: {}",
+                    courseId, e.getMessage());
+        }
+    }
 }

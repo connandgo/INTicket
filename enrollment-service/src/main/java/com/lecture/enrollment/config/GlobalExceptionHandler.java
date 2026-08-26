@@ -3,6 +3,7 @@ package com.lecture.enrollment.config;
 import com.lecture.enrollment.dto.EnrollmentDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +17,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<EnrollmentDto.ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest()
+                .body(EnrollmentDto.ApiResponse.error(e.getMessage()));
+    }
+
+    // 본인 소유가 아닌 예매를 취소하려 할 때 403
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<EnrollmentDto.ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(EnrollmentDto.ApiResponse.error(e.getMessage()));
     }
 
