@@ -6,6 +6,7 @@
         <!-- 데모 모드일 때만. 진짜 서버에 붙은 화면과 헷갈리지 않게 항상 띄운다. -->
         <span v-if="DEMO" class="demo">
           <b>데모 모드</b>
+          <button class="dbtn" @click="switchAccount">계정 전환</button>
           <button class="dbtn" @click="resetDemo">데이터 초기화</button>
           <button class="dbtn" @click="setDemo(false)">끄기</button>
         </span>
@@ -51,6 +52,12 @@ import { DEMO, setDemo } from '@/config/features.js'
 import { reset as resetDemoDb } from '@/mock/db.js'
 
 const auth = useAuthStore()
+
+// 데모에서 관람객 ↔ 공연기획사를 오갈 수 있게 한다.
+function switchAccount() {
+  auth.logout(false)
+  router.push('/login')
+}
 
 function resetDemo() {
   resetDemoDb()

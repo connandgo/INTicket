@@ -22,6 +22,10 @@
           <p class="alert alert-info">
             데모 모드입니다. 백엔드 없이 화면만 돌아가며, 비밀번호를 확인하지 않습니다.
           </p>
+          <p v-if="auth.isAuthenticated" class="alert alert-ok">
+            지금 <b>{{ auth.user?.name }}</b>({{ auth.user?.role === 'INSTRUCTOR' ? '공연기획사' : '관람객' }})으로
+            로그인되어 있습니다. 아래에서 다른 계정을 고르면 바뀝니다.
+          </p>
           <ul class="accts">
             <li v-for="u in accounts" :key="u.id">
               <button class="acct" @click="enter(u.email)">
