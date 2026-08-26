@@ -31,7 +31,16 @@
 
         <!-- 1단계 · 등급/매수 -->
         <section v-if="step === 1" class="card-sec">
-          <h2 class="stitle">좌석 등급</h2>
+          <h2 class="stitle">좌석 배치</h2>
+          <SeatMap
+            :round="round"
+            :grade="grade"
+            :quantity="qty"
+            :max="4"
+            @pick="onSeatPick"
+          />
+
+          <h2 class="stitle mt">좌석 등급</h2>
           <ul class="grades">
             <li v-for="g in round.grades" :key="g.grade">
               <button
@@ -128,6 +137,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
+import SeatMap from '@/components/SeatMap.vue'
 import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { bookingApi, isDuplicate } from '@/api/booking.js'
@@ -189,6 +199,14 @@ onBeforeUnmount(() => {
   if (step.value === 2 && held.value) releaseHeld()
 })
 
+// 배치도에서 자리를 누르면 그 등급 + 매수로 잡는다.
+// 좌석 번호는 서버로 보내지 않는다(개별 좌석 지정 미지원).
+function onSeatPick({ grade: g, quantity: n }) {
+  grade.value = g
+  qty.value = n
+  err.value = ''
+}
+
 function pick(g) {
   grade.value = g.grade
   if (qty.value > remaining(g)) qty.value = 1
@@ -229,11 +247,16 @@ function expire() {
 }
 
 function cancelHold() {
+  backToPick()
+  err.value = ''
+}
+
+// 선점을 풀고 1단계로 되돌린다. held를 비워서 같은 선점이 두 번 반환되지 않게 한다.
+function backToPick() {
   stopTimer()
   releaseHeld()
   held.value = null
   step.value = 1
-  err.value = ''
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
 
@@ -247,15 +270,15 @@ async function doPay() {
   } catch (e) {
     console.error('[booking] 결제 실패:', e)
     if (isDuplicate(e)) {
+      // 선점분을 돌려놓고 1단계로 되돌린다.
+      // held를 비우지 않으면 사용자가 '선점 취소'를 눌렀을 때 같은 수량이
+      // 두 번 복구되어 잔여 수량이 부풀어 오른다.
       err.value = '이미 예매하신 공연입니다. 같은 공연은 중복 예매할 수 없습니다.'
-      releaseHeld()   // 선점분은 돌려놓는다
+      backToPick()
     } else if (e.response?.status === 401) {
       // 선점 사이에 토큰이 만료되면 여기로 온다. 좌석은 물고 있어도 소용없으니 풀어 준다.
       err.value = '로그인이 만료되었습니다. 다시 로그인한 뒤 예매해 주세요.'
-      releaseHeld()
-      stopTimer()
-      held.value = null
-      step.value = 1
+      backToPick()
     } else {
       err.value = e.response?.data?.message || '결제에 실패했습니다. 잠시 후 다시 시도해 주세요.'
     }
