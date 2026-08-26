@@ -28,6 +28,15 @@ public class PaymentController {
     }
 
     /**
+     * POST /payments/internal/cancel - 내부 결제 취소 요청 (Enrollment Service 예매 취소 시 호출)
+     */
+    @PostMapping("/internal/cancel")
+    public ResponseEntity<Void> cancelPayment(@RequestBody PaymentDto.InternalCancelRequest request) {
+        paymentService.cancelPayment(request.getUserId(), request.getCourseId());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * GET /payments/{id} - 결제 단건 조회
      */
     @GetMapping("/{id}")

@@ -88,6 +88,25 @@ public class PaymentService {
     }
 
     /**
+     * 결제 취소 (모의 결제라 실제 PG 취소 연동 없이 상태만 변경)
+     * - Enrollment Service의 예매 취소 시 호출됨
+     */
+    @Transactional
+    public void cancelPayment(Long userId, Long courseId) {
+        Payment payment = paymentRepository.findByUserIdAndCourseId(userId, courseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "결제 정보를 찾을 수 없습니다 - userId: " + userId + ", courseId: " + courseId));
+
+        if (payment.getStatus() == Payment.Status.CANCELLED) {
+            log.info("[PaymentService] 이미 취소된 결제입니다 - paymentId: {}", payment.getId());
+            return;
+        }
+
+        payment.cancel();
+        log.info("[PaymentService] 결제 취소 완료 - paymentId: {}", payment.getId());
+    }
+
+    /**
      * 결제 단건 조회
      */
     public PaymentDto.PaymentResponse getPayment(Long id) {
