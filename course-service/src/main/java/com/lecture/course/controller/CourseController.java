@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +26,13 @@ public class CourseController {
     @PostMapping
     public ResponseEntity<CourseDto.ApiResponse<CourseDto.CourseResponse>> createCourse(
             @Valid @RequestBody CourseDto.CreateRequest request,
-            @RequestHeader("X-User-Id") Long instructorId) {
+            @RequestHeader("X-User-Id") Long instructorId,
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+
+        // course-service SecurityConfig가 permitAll()이라 여기서 직접 검증 (Gateway가 이미 JWT 검증 후 넘겨준 헤더, INSTRUCTOR=공연기획사)
+        if (!"INSTRUCTOR".equals(role)) {
+            throw new AccessDeniedException("강의 등록은 INSTRUCTOR만 가능합니다");
+        }
 
         CourseDto.CourseResponse response = courseService.createCourse(request, instructorId);
         return ResponseEntity.status(HttpStatus.CREATED)

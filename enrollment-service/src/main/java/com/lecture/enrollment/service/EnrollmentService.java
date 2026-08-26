@@ -45,7 +45,10 @@ public class EnrollmentService {
 
         Enrollment enrollment = enrollmentWriteService.createPendingEnrollment(userId, courseId);
 
-        paymentServiceClient.requestPayment(userId, courseId, BigDecimal.valueOf(99000));
+        // 원래 99,000원으로 고정 하드코딩되어 있던 부분 - Course.price(공연 가격)를 그대로 결제 요청에 반영
+        Map<String, Object> course = courseServiceClient.getCourse(courseId);
+        BigDecimal price = toBigDecimal(course.get("price"));
+        paymentServiceClient.requestPayment(userId, courseId, price);
 
         log.info("[EnrollmentService] 수강신청 완료 (결제 대기) - enrollmentId: {}", enrollment.getId());
         return EnrollmentDto.EnrollmentResponse.from(enrollment);
@@ -59,6 +62,12 @@ public class EnrollmentService {
         Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(userId, courseId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "수강 정보를 찾을 수 없습니다 - userId: " + userId + ", courseId: " + courseId));
+
+        // Kafka 중복 수신 시 enrollmentCount(누적 예매 수)·enrollment.completed 재발행 중복 방지
+        if (enrollment.getStatus() == Enrollment.Status.ACTIVE) {
+            log.info("[EnrollmentService] 이미 활성화된 수강입니다 (중복 이벤트 무시) - enrollmentId: {}", enrollment.getId());
+            return;
+        }
 
         enrollment.activate();
 
@@ -90,7 +99,8 @@ public class EnrollmentService {
                             .id(toLong(courseInfo.get("id")))
                             .title((String) courseInfo.get("title"))
                             .description((String) courseInfo.get("description"))
-                            .category(normalizeCategory((String) courseInfo.get("category")))
+                            // 원본 normalizeCategory()는 여기서 category(장르)를 한글로 미리 바꿔 프론트 genre.js 매핑을 깨뜨려서 제거함 (아래 normalizeCategory 주석 참고)
+                            .category((String) courseInfo.get("category"))
                             .price(toInteger(courseInfo.get("price")))
                             .thumbnail((String) courseInfo.get("thumbnail"))
                             .instructorName(
@@ -129,18 +139,17 @@ public class EnrollmentService {
                 .build();
     }
 
-    private String normalizeCategory(String category) {
-        if (category == null) return null;
-
-        return switch (category) {
-            case "BACKEND" -> "백엔드";
-            case "FRONTEND" -> "프론트엔드";
-            case "DEVOPS" -> "DevOps";
-            case "DATA" -> "데이터";
-            case "AI" -> "AI";
-            default -> category;
-        };
-    }
+    // private String normalizeCategory(String category) {
+    //     if (category == null) return null;
+    //     return switch (category) {
+    //         case "BACKEND" -> "백엔드";
+    //         case "FRONTEND" -> "프론트엔드";
+    //         case "DEVOPS" -> "DevOps";
+    //         case "DATA" -> "데이터";
+    //         case "AI" -> "AI";
+    //         default -> category;
+    //     };
+    // }
 
     private Long toLong(Object value) {
         if (value == null) return null;
@@ -152,6 +161,15 @@ public class EnrollmentService {
         if (value == null) return null;
         if (value instanceof Number number) return number.intValue();
         return Integer.parseInt(value.toString());
+    }
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            throw new IllegalStateException("강의 가격 정보를 찾을 수 없습니다.");
+        }
+        if (value instanceof BigDecimal bigDecimal) return bigDecimal;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        return new BigDecimal(value.toString());
     }
 
     private String firstNonNull(String... values) {
