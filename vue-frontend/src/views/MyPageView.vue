@@ -140,7 +140,11 @@ async function loadRec() {
     const res = await recommendApi.forUser(uid)
     const d = res?.data?.data ?? res?.data ?? {}
     rec.items = Array.isArray(d.recommendedCourses) ? d.recommendedCourses : []
-    rec.message = d.message || ''
+    // 백엔드 message는 "FRONTEND 장르 기반 추천 공연입니다" 처럼 내부 enum을 그대로 담아 온다.
+    // 화면에는 장르 이름으로 바꿔서 보여 준다.
+    rec.message = d.basedOnCategory
+      ? `${genreLabel(d.basedOnCategory)} 장르를 좋아하시는 것 같아 골랐습니다`
+      : '지금 가장 많이 예매된 공연입니다'
   } catch (e) {
     console.error('[mypage] 추천 조회 실패:', e)
     rec.error = e.response?.data?.message || '추천 서비스에 연결하지 못했습니다.'
