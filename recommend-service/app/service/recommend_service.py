@@ -55,7 +55,7 @@ class RecommendService:
             userId=user_id,
             recommendedCourses=recommended,
             basedOnCategory=dominant_category,
-            message=f"{dominant_category.value} 카테고리 기반 추천 강의입니다"
+            message=f"{dominant_category.value} 장르 기반 추천 공연입니다"
         )
 
     async def _find_dominant_category(
@@ -98,7 +98,7 @@ class RecommendService:
             userId=user_id,
             recommendedCourses=popular,
             basedOnCategory=None,
-            message="인기 강의 추천입니다"
+            message="인기 공연 추천입니다"
         )
 
 
