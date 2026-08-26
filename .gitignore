@@ -1,0 +1,42 @@
+# === 용량 큰 파일 (GitHub 100MB 제한 초과) ===
+*.tar
+msa-lecture-images.part.*
+
+# === Node ===
+node_modules/
+node_modules.slack-backup/
+dist/
+*.local
+
+# === Gradle / Java ===
+.gradle/
+build/
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+*.log
+
+# === Python (recommend-service) ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# === IDE ===
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+
+# === OS ===
+.DS_Store
+__MACOSX/
+
+# === 압축 파일 ===
+*.zip
