@@ -85,6 +85,40 @@ public class EnrollmentService {
     }
 
     /**
+     * 예매 취소
+     * - 본인 예매만 취소 가능
+     * - ACTIVE였던 경우에만 수강생 수 감소(PENDING이었으면 애초에 증가된 적 없음)
+     * - 결제도 함께 취소(모의 결제라 상태만 CANCELLED로 변경, 실제 환불 트랜잭션 없음)
+     */
+    @Transactional
+    public void cancelEnrollment(Long userId, Long enrollmentId) {
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "예매 정보를 찾을 수 없습니다: " + enrollmentId));
+
+        if (!enrollment.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "본인의 예매만 취소할 수 있습니다");
+        }
+
+        if (enrollment.getStatus() == Enrollment.Status.CANCELLED) {
+            throw new IllegalArgumentException("이미 취소된 예매입니다");
+        }
+
+        boolean wasActive = enrollment.getStatus() == Enrollment.Status.ACTIVE;
+
+        enrollment.cancel();
+
+        if (wasActive) {
+            courseServiceClient.decreaseEnrollmentCount(enrollment.getCourseId());
+        }
+
+        paymentServiceClient.cancelPayment(userId, enrollment.getCourseId());
+
+        log.info("[EnrollmentService] 예매 취소 완료 - enrollmentId: {}", enrollment.getId());
+    }
+
+    /**
      * 사용자 수강 목록 조회
      * - course-service에서 강의 상세 정보를 붙여서 반환
      */
