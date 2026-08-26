@@ -67,4 +67,10 @@ public class Course {
     public void increaseEnrollmentCount() {
         this.enrollmentCount++;
     }
+
+    public void decreaseEnrollmentCount() {
+        if (this.enrollmentCount > 0) {
+            this.enrollmentCount--;
+        }
+    }
 }
