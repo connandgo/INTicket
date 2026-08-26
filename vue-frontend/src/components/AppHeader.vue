@@ -3,6 +3,13 @@
     <!-- 상단 유틸 -->
     <div class="util">
       <div class="wrap util-in">
+        <!-- 데모 모드일 때만. 진짜 서버에 붙은 화면과 헷갈리지 않게 항상 띄운다. -->
+        <span v-if="DEMO" class="demo">
+          <b>데모 모드</b>
+          <button class="dbtn" @click="resetDemo">데이터 초기화</button>
+          <button class="dbtn" @click="setDemo(false)">끄기</button>
+        </span>
+
         <template v-if="auth.isAuthenticated">
           <span class="hi"><b>{{ auth.user?.name || '회원' }}</b>님 · {{ roleLabel }}</span>
           <router-link to="/enrollments" class="ul">내 예매</router-link>
@@ -40,8 +47,16 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth.js'
+import { DEMO, setDemo } from '@/config/features.js'
+import { reset as resetDemoDb } from '@/mock/db.js'
 
 const auth = useAuthStore()
+
+function resetDemo() {
+  resetDemoDb()
+  sessionStorage.clear()
+  location.href = '/'
+}
 const route = useRoute()
 const router = useRouter()
 
@@ -61,7 +76,23 @@ function signOut() {
 
 .util { background: var(--bg-soft); border-bottom: 1px solid var(--line); }
 .util-in { height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
-.hi { font-size: 12px; color: var(--t3); margin-right: auto; }
+.demo {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 2px 8px;
+  background: var(--warn-wash);
+  border: 1px solid #F0DDBB;
+  border-radius: 2px;
+  font-size: 11px;
+  color: var(--warn);
+  margin-right: auto;
+}
+.demo b { font-weight: 700; }
+.dbtn { font-size: 11px; color: var(--warn); text-decoration: underline; text-underline-offset: 2px; }
+.dbtn:hover { color: var(--red-dark); }
+
+.hi { font-size: 12px; color: var(--t3); }
+.demo ~ .hi { margin-right: auto; }
+:where(.util-in) > .hi:first-child { margin-right: auto; }
 .hi b { color: var(--t1); font-weight: 600; }
 .ul { font-size: 12px; color: var(--t2); }
 .ul:hover { color: var(--red); text-decoration: underline; text-underline-offset: 2px; }

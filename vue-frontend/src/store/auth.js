@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth.js'
+import { DEMO } from '@/config/features.js'
+import { read as readDemoDb } from '@/mock/db.js'
 
 const AUTH_SERVER_URL = import.meta.env.VITE_AUTH_SERVER_URL || 'http://localhost:8080'
 
@@ -50,6 +52,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // 데모 모드 로그인 — auth-server 없이 계정만 골라 들어간다.
+  // 비밀번호를 받지 않는다. 실제 인증이 아니라는 뜻이고, DEMO 일 때만 쓰인다.
+  function demoLogin(email) {
+    const user = readDemoDb().users.find((u) => u.email === email)
+    if (!user) throw new Error('데모 계정을 찾을 수 없습니다.')
+    setToken(`demo.${user.id}.${Date.now()}`)
+    setUser(user)
+    return user
+  }
+
+  function demoUsers() {
+    return DEMO ? readDemoDb().users : []
+  }
+
   // OAuth2 Authorization Code Flow
   function redirectToLogin() {
     const params = new URLSearchParams({
@@ -77,6 +93,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
+    demoLogin,
+    demoUsers,
     accessToken,
     user,
     isAuthenticated,

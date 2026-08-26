@@ -1,10 +1,14 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/auth.js'
+import { DEMO } from '@/config/features.js'
+import mockAdapter from '@/mock/adapter.js'
 
 const api = axios.create({
   baseURL: '',
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+  // 데모 모드에서는 네트워크로 나가지 않고 브라우저 안에서 응답을 만든다.
+  ...(DEMO ? { adapter: mockAdapter } : {})
 })
 
 api.interceptors.request.use((config) => {

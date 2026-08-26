@@ -17,9 +17,32 @@
 
       <!-- 로그인 -->
       <section v-if="mode === 'login'" class="pane">
-        <p class="lead">INTicket 계정으로 로그인하면 공연을 예매할 수 있습니다.</p>
-        <button class="btn btn-red btn-lg btn-wide" @click="auth.redirectToLogin()">로그인</button>
-        <p class="fhint center">계정이 없으신가요? <button class="lk" @click="mode = 'join'">회원가입</button></p>
+        <!-- 데모 모드: 백엔드 없이 계정만 골라 들어간다 -->
+        <template v-if="DEMO">
+          <p class="alert alert-info">
+            데모 모드입니다. 백엔드 없이 화면만 돌아가며, 비밀번호를 확인하지 않습니다.
+          </p>
+          <ul class="accts">
+            <li v-for="u in accounts" :key="u.id">
+              <button class="acct" @click="enter(u.email)">
+                <span class="a-av">{{ u.name.charAt(0) }}</span>
+                <span class="a-t">
+                  <b>{{ u.name }}</b>
+                  <span>{{ u.role === 'INSTRUCTOR' ? '공연기획사' : '관람객' }} · {{ u.email }}</span>
+                </span>
+                <span class="a-go">›</span>
+              </button>
+            </li>
+          </ul>
+          <p v-if="err" class="alert alert-err">{{ err }}</p>
+          <p class="fhint center">새 계정이 필요하면 <button class="lk" @click="mode = 'join'">회원가입</button></p>
+        </template>
+
+        <template v-else>
+          <p class="lead">INTicket 계정으로 로그인하면 공연을 예매할 수 있습니다.</p>
+          <button class="btn btn-red btn-lg btn-wide" @click="auth.redirectToLogin()">로그인</button>
+          <p class="fhint center">계정이 없으신가요? <button class="lk" @click="mode = 'join'">회원가입</button></p>
+        </template>
       </section>
 
       <!-- 회원가입 -->
@@ -70,10 +93,25 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth.js'
 import { authApi } from '@/api/auth.js'
+import { DEMO } from '@/config/features.js'
 
 const auth = useAuthStore()
+const router = useRouter()
+
+const accounts = ref(auth.demoUsers())
+
+function enter(email) {
+  err.value = ''
+  try {
+    auth.demoLogin(email)
+    router.push('/courses')
+  } catch (e) {
+    err.value = e.message || '로그인하지 못했습니다.'
+  }
+}
 
 const mode = ref('login')
 const loading = ref(false)
@@ -88,8 +126,14 @@ async function join() {
   try {
     await authApi.register(form.value)
     ok.value = '가입이 완료되었습니다. 로그인해 주세요.'
+    const joined = form.value.email
     form.value = { name: '', email: '', password: '', role: form.value.role }
-    setTimeout(() => { mode.value = 'login'; ok.value = '' }, 1600)
+    setTimeout(() => {
+      accounts.value = auth.demoUsers()
+      mode.value = 'login'
+      ok.value = ''
+      if (DEMO) enter(joined)
+    }, 1200)
   } catch (e) {
     console.error('[login] 회원가입 실패:', e)
     err.value = e.response?.data?.message || '회원가입에 실패했습니다.'
@@ -142,6 +186,29 @@ async function join() {
 .role.on b { color: var(--red-dark); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.accts { display: flex; flex-direction: column; gap: 8px; }
+.acct {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--r);
+  text-align: left;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.acct:hover { border-color: var(--red); background: var(--red-wash); }
+.a-av {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--navy); color: #fff;
+  font-size: 14px; font-weight: 700;
+  flex-shrink: 0;
+}
+.a-t { display: flex; flex-direction: column; min-width: 0; }
+.a-t b { font-size: 14px; font-weight: 700; }
+.a-t span { font-size: 11.5px; color: var(--t3); }
+.a-go { margin-left: auto; color: var(--t4); font-size: 17px; }
 
 .center { text-align: center; }
 .lk { color: var(--red); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; font-size: 12px; }
