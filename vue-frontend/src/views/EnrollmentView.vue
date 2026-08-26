@@ -37,16 +37,19 @@
             <div class="rmain">
               <span class="bdg bdg-gray">{{ genre(e) }}</span>
               <router-link :to="`/courses/${e.courseId}`" class="rttl">{{ title(e) }}</router-link>
+              <p v-if="detail(e)" class="seat num">
+                {{ detail(e).grade }}석 · {{ detail(e).quantity }}매
+              </p>
               <dl class="meta num">
                 <div><dt>예매번호</dt><dd>{{ e.id }}</dd></div>
-                <div><dt>공연 ID</dt><dd>{{ e.courseId }}</dd></div>
                 <div v-if="e.createdAt"><dt>예매일</dt><dd>{{ fmt(e.createdAt) }}</dd></div>
               </dl>
             </div>
 
             <div class="rside">
               <span class="bdg" :class="STATUS_STYLE[e.status]">{{ STATUS_LABEL[e.status] }}</span>
-              <span v-if="e.course?.price" class="rprice num">{{ Number(e.course.price).toLocaleString() }}원</span>
+              <span v-if="detail(e)" class="rprice num">{{ detail(e).amount.toLocaleString() }}원</span>
+              <span v-else-if="e.course?.price" class="rprice num">{{ Number(e.course.price).toLocaleString() }}원</span>
             </div>
           </li>
         </ul>
@@ -64,12 +67,19 @@ import { computed, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
+import { bookingApi } from '@/api/booking.js'
 import { genreLabel } from '@/domain/genre.js'
 
 const store = useEnrollmentStore()
 const hasPending = computed(() => store.items.some((e) => e.status === 'PENDING'))
 
-onMounted(() => store.fetchMine())
+onMounted(async () => {
+  await store.fetchMine()
+  // 모의 결제가 곧바로 끝나므로 PENDING이 남아 있으면 잠깐 뒤 한 번 더 읽는다.
+  if (store.items.some((e) => e.status === 'PENDING')) {
+    setTimeout(() => store.fetchMine(), 1500)
+  }
+})
 
 // EnrollmentResponse.course(CourseSummary)는 비어 있을 수 있다. 없으면 ID로 버틴다.
 function title(e) {
@@ -78,6 +88,11 @@ function title(e) {
 function genre(e) {
   return genreLabel(e.course?.category)
 }
+// 회차·등급·매수는 백엔드가 아직 모르는 값이라 예매 시점에 브라우저에 붙여 둔 것을 읽는다.
+function detail(e) {
+  return bookingApi.detailOf(e.id)
+}
+
 function fmt(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '-'
@@ -103,6 +118,7 @@ function fmt(iso) {
 .rmain { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
 .rttl { font-size: 16px; font-weight: 700; letter-spacing: -0.04em; }
 .rttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
+.seat { font-size: 12.5px; font-weight: 600; color: var(--navy); }
 .meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 2px; }
 .meta > div { display: flex; gap: 6px; font-size: 12px; }
 .meta dt { color: var(--t4); }

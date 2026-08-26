@@ -52,7 +52,10 @@ export const useCourseStore = defineStore('course', () => {
       if (!current.value) error.value = '존재하지 않는 공연입니다.'
     } catch (e) {
       console.error('[course] 상세 조회 실패:', e)
-      error.value = e.response?.status === 404
+      // 백엔드는 없는 id에 404가 아니라 400 + "강의를 찾을 수 없습니다"로 답한다
+      const notFound = e.response?.status === 404 ||
+        (e.response?.status === 400 && /찾을 수 없|존재하지 않/.test(e.response?.data?.message || ''))
+      error.value = notFound
         ? '존재하지 않는 공연입니다.'
         : message(e, '공연 정보를 불러오지 못했습니다.')
     } finally {

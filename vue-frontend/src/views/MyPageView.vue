@@ -48,6 +48,22 @@
         </table>
       </section>
 
+      <!-- 공연기획사: 회차별 판매 현황 -->
+      <section v-if="isPlanner && myCourses.length" class="sec">
+        <h2 class="stitle">판매 현황</h2>
+        <div v-for="c in myCourses" :key="'s' + c.id" class="salesblk">
+          <p class="sc-t">{{ c.title }}</p>
+          <ul class="sc-rows">
+            <li v-for="r in salesOf(c.id)" :key="r.id" class="sc-row">
+              <span class="sc-when num">{{ r.date.replaceAll('-', '.') }} ({{ r.weekday }}) {{ r.time }}</span>
+              <span class="sc-bar"><i :style="{ width: r.rate + '%' }"></i></span>
+              <span class="sc-n num">{{ r.sold }} / {{ r.capacity }}</span>
+              <span class="sc-p num" :class="{ hot: r.rate >= 80 }">{{ r.rate }}%</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
       <!-- 관람객: 추천 공연 -->
       <section v-else class="sec">
         <h2 class="stitle">추천 공연</h2>
@@ -78,13 +94,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import CourseCard from '@/components/CourseCard.vue'
 import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
 import { recommendApi } from '@/api/enrollment.js'
 import { genreLabel } from '@/domain/genre.js'
+import { performanceApi } from '@/api/performance.js'
 
 const auth = useAuthStore()
 const course = useCourseStore()
@@ -97,6 +114,19 @@ const myCourses = computed(() =>
 )
 
 const rec = reactive({ items: [], message: '', loading: false, error: null })
+
+// 회차별 판매율. performance-service가 생기면 api/performance.js 안만 바뀐다.
+const sales = ref({})
+function salesOf(courseId) {
+  return sales.value[courseId] || []
+}
+async function loadSales(list) {
+  const out = {}
+  for (const c of list) {
+    try { out[c.id] = await performanceApi.sales(c) } catch { out[c.id] = [] }
+  }
+  sales.value = out
+}
 
 async function loadRec() {
   const uid = auth.user?.id
@@ -120,9 +150,13 @@ async function loadRec() {
   }
 }
 
-onMounted(() => {
-  if (isPlanner.value) course.fetchCourses()
-  else loadRec()
+onMounted(async () => {
+  if (isPlanner.value) {
+    await course.fetchCourses()
+    await loadSales(myCourses.value)
+  } else {
+    loadRec()
+  }
 })
 </script>
 
@@ -153,6 +187,24 @@ onMounted(() => {
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 28px 20px; }
 
+.salesblk { margin-bottom: 24px; }
+.sc-t { font-size: 14px; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 8px; }
+.sc-rows { border-top: 1px solid var(--line); }
+.sc-row {
+  display: grid;
+  grid-template-columns: 190px 1fr 90px 48px;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.sc-when { font-size: 13px; color: var(--t2); }
+.sc-bar { height: 7px; background: var(--bg-dim); border-radius: 4px; overflow: hidden; }
+.sc-bar i { display: block; height: 100%; background: var(--navy); }
+.sc-n { font-size: 12px; color: var(--t3); text-align: right; }
+.sc-p { font-size: 13px; font-weight: 700; text-align: right; }
+.sc-p.hot { color: var(--red); }
+
 .tbl { width: 100%; border-collapse: collapse; border-top: 2px solid var(--navy); }
 .tbl th, .tbl td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; text-align: left; }
 .tbl th { background: var(--bg-soft); font-weight: 600; color: var(--t2); font-size: 12.5px; }
@@ -163,5 +215,7 @@ onMounted(() => {
 @media (max-width: 760px) {
   .grid { grid-template-columns: repeat(2, 1fr); gap: 22px 12px; }
   .tbl { display: block; overflow-x: auto; white-space: nowrap; }
+  .sc-row { grid-template-columns: 1fr 60px 44px; row-gap: 4px; }
+  .sc-when { grid-column: 1 / -1; }
 }
 </style>

@@ -19,6 +19,17 @@
         >{{ t.label }}</button>
       </div>
 
+      <div class="search">
+        <input
+          v-model.trim="q"
+          class="inp"
+          type="search"
+          placeholder="공연명을 입력하세요"
+          aria-label="공연 검색"
+        />
+        <button v-if="q" class="clear" type="button" @click="q = ''" aria-label="검색어 지우기">✕</button>
+      </div>
+
       <div class="bar">
         <div class="sorts">
           <button class="sort" :class="{ on: sort === 'pop' }" @click="sort = 'pop'">인기순</button>
@@ -39,8 +50,9 @@
       </div>
 
       <div v-else-if="!list.length" class="blank">
-        <h3>등록된 공연이 없습니다</h3>
-        <p>{{ store.genre === 'ALL' ? '아직 등록된 공연이 없습니다.' : '이 장르에 등록된 공연이 없습니다.' }}</p>
+        <h3>{{ q ? '검색 결과가 없습니다' : '등록된 공연이 없습니다' }}</h3>
+        <p v-if="q">'{{ q }}'와 일치하는 공연이 없습니다.</p>
+        <p v-else>{{ store.genre === 'ALL' ? '아직 등록된 공연이 없습니다.' : '이 장르에 등록된 공연이 없습니다.' }}</p>
       </div>
 
       <ul v-else class="grid">
@@ -66,8 +78,13 @@ const sort = ref('pop')
 
 const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
 
+const q = ref('')
+
 const list = computed(() => {
-  const arr = [...store.visible]
+  const kw = q.value.trim().toLowerCase()
+  let arr = [...store.visible]
+  // 공연명 부분 일치. 결과가 없으면 빈 목록을 그대로 보여 준다.
+  if (kw) arr = arr.filter((c) => (c.title || '').toLowerCase().includes(kw))
   if (sort.value === 'pop') return arr.sort((a, b) => (b.enrollmentCount || 0) - (a.enrollmentCount || 0))
   if (sort.value === 'low') return arr.sort((a, b) => Number(a.price) - Number(b.price))
   return arr.sort((a, b) => Number(b.id) - Number(a.id))
@@ -77,6 +94,16 @@ onMounted(() => store.fetchCourses())
 </script>
 
 <style scoped>
+.search { position: relative; margin-bottom: 16px; max-width: 420px; }
+.search .inp { padding-right: 34px; }
+.clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-dim); color: var(--t2); font-size: 11px;
+}
+.clear:hover { background: var(--line-dark); }
+
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
 .sorts { display: flex; align-items: center; gap: 9px; }
 .sort { font-size: 13px; color: var(--t3); }
