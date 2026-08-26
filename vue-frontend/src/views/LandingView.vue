@@ -1,293 +1,156 @@
 <template>
-  <div class="landing">
+  <div>
     <AppHeader />
 
-    <!-- 히어로 섹션 -->
+    <!-- 상단 배너 -->
     <section class="hero">
-      <div class="hero-inner">
-        <div class="hero-content fade-in-up">
-          <span class="hero-badge">MSA 기반 교육 플랫폼</span>
-          <h1 class="hero-title">배움을 더 스마트하게,<br>커리어를 더 빠르게</h1>
-          <p class="hero-desc">개발, 디자인, 비즈니스 분야의 전문가 강의를 수강하고 실력을 키워보세요.</p>
-          <div class="hero-actions">
-            <router-link to="/login" class="btn btn-primary btn-lg">무료로 시작하기</router-link>
-            <router-link to="/courses" class="btn btn-outline btn-lg">강의 둘러보기</router-link>
-          </div>
-          <div class="hero-stats">
-            <div class="stat"><span class="stat-num">1,200+</span><span class="stat-label">강의</span></div>
-            <div class="stat"><span class="stat-num">340+</span><span class="stat-label">강사</span></div>
-            <div class="stat"><span class="stat-num">28,000+</span><span class="stat-label">수강생</span></div>
+      <div class="wrap hero-in">
+        <div class="hero-txt">
+          <p class="kicker">공연 예매</p>
+          <h1 class="hh">
+            보고 싶은 무대,<br />
+            지금 바로 예매하세요
+          </h1>
+          <p class="hp">뮤지컬 · 연극 · 콘서트 · 클래식 공연을 한 곳에서 찾고 예매합니다.</p>
+          <div class="hbtn">
+            <router-link :to="auth.isAuthenticated ? '/courses' : '/login'" class="btn btn-red btn-lg">
+              {{ auth.isAuthenticated ? '공연 보러 가기' : '로그인하고 예매하기' }}
+            </router-link>
+            <router-link v-if="auth.isAuthenticated" to="/enrollments" class="btn btn-line btn-lg">내 예매 확인</router-link>
           </div>
         </div>
-        <div class="hero-visual fade-in">
-          <img src="@/assets/images/logo/main_logo.png" alt="LearnNexus" class="hero-logo" />
-        </div>
+
+        <ul class="hero-tiles" aria-hidden="true">
+          <li v-for="(g, i) in GENRES" :key="g.code" :class="'tile t' + i">
+            <span>{{ g.label }}</span>
+          </li>
+        </ul>
       </div>
     </section>
 
-    <!-- 인기 강의 -->
-    <section class="popular-section">
-      <div class="section-inner">
-        <div class="section-header">
-          <h2 class="section-title">인기 강의</h2>
-          <router-link to="/login" class="section-link">전체 보기 →</router-link>
-        </div>
-        <div class="course-grid">
-          <div v-for="course in featuredCourses" :key="course.id" class="course-card-landing">
-            <div class="card-thumb" :class="course.thumbBg">
-              <img :src="course.thumbSrc" :alt="course.title" class="thumb-img" />
-            </div>
-            <div class="card-body">
-              <span class="badge" :class="course.badgeClass">{{ course.category }}</span>
-              <h3 class="card-title">{{ course.title }}</h3>
-              <div class="card-meta">
-                <span class="instructor">{{ course.instructor }}</span>
-                <span class="price">{{ course.price }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- 장르 바로가기 -->
+    <section class="wrap qk">
+      <router-link
+        v-for="g in GENRES"
+        :key="g.code"
+        :to="auth.isAuthenticated ? '/courses' : '/login'"
+        class="qk-i"
+        @click="pick(g.code)"
+      >
+        <span class="qk-l">{{ g.label }}</span>
+        <span class="qk-a">›</span>
+      </router-link>
     </section>
 
-    <!-- 특징 섹션 -->
-    <section class="features-section">
-      <div class="section-inner">
-        <h2 class="section-title center">왜 LearnNexus인가요?</h2>
-        <div class="features-grid">
-          <div v-for="f in features" :key="f.title" class="feature-card">
-            <div class="feature-icon">{{ f.icon }}</div>
-            <h3 class="feature-title">{{ f.title }}</h3>
-            <p class="feature-desc">{{ f.desc }}</p>
-          </div>
-        </div>
+    <!-- 인기 공연 -->
+    <section class="wrap rank">
+      <h2 class="stitle">인기 공연</h2>
+
+      <div v-if="!auth.isAuthenticated" class="blank">
+        <h3>로그인하면 공연 목록을 볼 수 있습니다</h3>
+        <p>관람객 또는 공연기획사 계정으로 로그인해 주세요.</p>
+        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
       </div>
+
+      <div v-else-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
+
+      <div v-else-if="store.error" class="blank">
+        <h3>공연을 불러오지 못했습니다</h3>
+        <p>{{ store.error }}</p>
+      </div>
+
+      <div v-else-if="!top.length" class="blank">
+        <h3>등록된 공연이 없습니다</h3>
+        <p>공연기획사 계정으로 첫 공연을 등록해 보세요.</p>
+      </div>
+
+      <ul v-else class="grid">
+        <li v-for="(c, i) in top" :key="c.id"><CourseCard :course="c" :rank="i + 1" /></li>
+      </ul>
     </section>
 
-    <!-- CTA -->
-    <section class="cta-section">
-      <div class="cta-inner">
-        <h2>지금 바로 시작하세요</h2>
-        <p>수천 명의 개발자들이 LearnNexus와 함께 성장하고 있습니다.</p>
-        <router-link to="/login" class="btn btn-primary btn-lg">무료로 시작하기</router-link>
-      </div>
-    </section>
-
-    <!-- 푸터 -->
-    <footer class="footer">
-      <div class="footer-inner">
-        <div class="footer-logo">
-          <img src="@/assets/images/logo/main_logo.png" alt="LearnNexus" />
-          <span>LearnNexus</span>
-        </div>
-        <p class="footer-copy">© 2026 LearnNexus. All rights reserved.</p>
+    <footer class="ft">
+      <div class="wrap ft-in">
+        <p class="ft-n">INTicket</p>
+        <p class="small muted">공연 예매 MVP · 회차와 좌석 지정은 지원하지 않습니다</p>
       </div>
     </footer>
   </div>
 </template>
 
 <script setup>
+import { computed, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
+import CourseCard from '@/components/CourseCard.vue'
+import { useAuthStore } from '@/store/auth.js'
+import { useCourseStore } from '@/store/course.js'
+import { GENRES } from '@/domain/genre.js'
 
-import springImg   from '@/assets/images/courses/spring_boot.png'
-import vueImg      from '@/assets/images/courses/vue_js.png'
-import k8sImg      from '@/assets/images/courses/kubernetes.png'
-import dockerImg   from '@/assets/images/courses/docker.png'
-import pythonImg   from '@/assets/images/courses/python.png'
-import genaiImg    from '@/assets/images/courses/generative_ai.png'
+const auth = useAuthStore()
+const store = useCourseStore()
 
-const featuredCourses = [
-  { id:1, title:'Spring Boot MSA 완성', category:'백엔드',    instructor:'김강사', price:'₩89,000', thumbSrc: springImg, thumbBg:'thumb-teal',   badgeClass:'badge-teal'   },
-  { id:2, title:'Vue 3 실전 프로젝트',  category:'프론트엔드', instructor:'이강사', price:'₩69,000', thumbSrc: vueImg,    thumbBg:'thumb-teal',   badgeClass:'badge-teal'   },
-  { id:3, title:'Kubernetes 운영 가이드',category:'DevOps',   instructor:'박강사', price:'₩99,000', thumbSrc: k8sImg,    thumbBg:'thumb-blue',   badgeClass:'badge-blue'   },
-  { id:4, title:'Docker 컨테이너 실전', category:'DevOps',    instructor:'정강사', price:'₩79,000', thumbSrc: dockerImg, thumbBg:'thumb-blue',   badgeClass:'badge-blue'   },
-  { id:5, title:'Python 데이터 분석',   category:'데이터',    instructor:'최강사', price:'₩59,000', thumbSrc: pythonImg, thumbBg:'thumb-purple', badgeClass:'badge-purple' },
-  { id:6, title:'Generative AI 실전',   category:'AI',        instructor:'한강사', price:'₩75,000', thumbSrc: genaiImg,  thumbBg:'thumb-pink',   badgeClass:'badge-pink'   },
-]
+const top = computed(() => store.ranked.slice(0, 5))
 
-const features = [
-  { icon:'🚀', title:'실무 중심 커리큘럼', desc:'현업 전문가가 직접 설계한 실무 중심 강의로 빠르게 성장하세요.' },
-  { icon:'🎯', title:'맞춤 강의 추천', desc:'AI 기반 추천 시스템이 수강 이력을 분석해 딱 맞는 강의를 추천합니다.' },
-  { icon:'💳', title:'간편한 수강 신청', desc:'원클릭 결제와 즉시 수강으로 학습을 바로 시작하세요.' },
-  { icon:'📱', title:'언제 어디서나', desc:'PC, 태블릿, 모바일 어디서든 끊김 없이 학습하세요.' },
-]
+function pick(code) {
+  store.setGenre(code)
+}
+
+onMounted(() => {
+  if (auth.isAuthenticated) store.fetchCourses()
+})
 </script>
 
 <style scoped>
-.landing { background: var(--color-bg-secondary); }
+.hero { background: var(--navy); color: #fff; }
+.hero-in { display: grid; grid-template-columns: 1fr 320px; gap: 40px; align-items: center; padding-top: 54px; padding-bottom: 54px; }
+.kicker { font-size: 12.5px; font-weight: 700; letter-spacing: .12em; color: #FF8494; margin-bottom: 12px; }
+.hh { font-size: 36px; font-weight: 800; line-height: 1.28; letter-spacing: -0.05em; }
+.hp { margin: 14px 0 26px; font-size: 15px; color: rgba(255,255,255,.68); }
+.hbtn { display: flex; flex-wrap: wrap; gap: 9px; }
+.hbtn .btn-line { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+.hbtn .btn-line:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.6); }
 
-/* 히어로 */
-.hero {
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 50%, #f0f9ff 100%);
-  border-bottom: 1px solid var(--color-border);
-  padding: 80px 0 64px;
-}
-.hero-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 24px;
+/* 장식용 포스터 타일 */
+.hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile {
+  aspect-ratio: 3 / 4;
+  border-radius: var(--r);
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 48px;
-  align-items: center;
-}
-.hero-badge {
-  display: inline-block;
-  padding: 5px 14px;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-.hero-title {
-  font-size: 42px;
+  place-items: end start;
+  padding: 10px;
+  font-size: 12.5px;
   font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.5px;
-  color: var(--color-text-primary);
-  margin-bottom: 16px;
+  color: rgba(255,255,255,.85);
 }
-.hero-desc {
-  font-size: 16px;
-  color: var(--color-text-secondary);
-  line-height: 1.7;
-  max-width: 460px;
-  margin-bottom: 28px;
-}
-.hero-actions {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 40px;
-}
-.btn-lg { padding: 12px 28px; font-size: 15px; }
-.hero-stats {
-  display: flex;
-  gap: 36px;
-}
-.stat { display: flex; flex-direction: column; gap: 2px; }
-.stat-num { font-size: 22px; font-weight: 700; color: var(--color-primary); }
-.stat-label { font-size: 12px; color: var(--color-text-secondary); }
-.hero-visual {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.hero-logo {
-  width: 200px;
-  height: 200px;
-  object-fit: contain;
-  border-radius: 24px;
-  box-shadow: var(--shadow-lg);
-}
+.t0 { background: linear-gradient(160deg,#7A1F2B,#B33A49); }
+.t1 { background: linear-gradient(160deg,#123B33,#276B5C); }
+.t2 { background: linear-gradient(160deg,#3A2352,#61407F); }
+.t3 { background: linear-gradient(160deg,#14324F,#2A5C86); }
 
-/* 강의 섹션 */
-.popular-section { padding: 64px 0; }
-.section-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+.qk { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 34px auto 46px; }
+.qk-i {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  transition: border-color .15s var(--ease), background .15s var(--ease);
 }
-.section-title { font-size: 22px; font-weight: 700; color: var(--color-text-primary); }
-.section-title.center { text-align: center; margin-bottom: 40px; }
-.section-link { font-size: 14px; color: var(--color-primary); font-weight: 500; }
-.section-link:hover { text-decoration: underline; }
+.qk-i:hover { border-color: var(--red); background: var(--red-wash); }
+.qk-l { font-size: 15px; font-weight: 700; letter-spacing: -0.04em; }
+.qk-a { color: var(--t4); font-size: 17px; }
 
-.course-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-.course-card-landing {
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: var(--transition);
-}
-.course-card-landing:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-.card-thumb {
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.thumb-teal   { background: #E1F5EE; }
-.thumb-blue   { background: #E6F1FB; }
-.thumb-purple { background: #EEEDFE; }
-.thumb-pink   { background: #FBEAF0; }
-.thumb-img { width: 100%; height: 100%; object-fit: contain; padding: 14px; }
-.card-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
-.card-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); line-height: 1.4; }
-.card-meta { display: flex; justify-content: space-between; align-items: center; }
-.instructor { font-size: 12px; color: var(--color-text-secondary); }
-.price { font-size: 14px; font-weight: 600; color: var(--color-primary); }
+.rank { padding-bottom: 70px; }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
 
-/* 특징 */
-.features-section { padding: 64px 0; background: var(--color-bg-primary); }
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-}
-.feature-card {
-  padding: 28px 24px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  text-align: center;
-  transition: var(--transition);
-}
-.feature-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-.feature-icon { font-size: 32px; margin-bottom: 12px; }
-.feature-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
-.feature-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; }
+.ft { border-top: 1px solid var(--line); background: var(--bg-soft); }
+.ft-in { padding: 26px 20px; }
+.ft-n { font-size: 14px; font-weight: 800; letter-spacing: -0.04em; color: var(--navy); margin-bottom: 4px; }
 
-/* CTA */
-.cta-section {
-  padding: 80px 0;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  text-align: center;
+@media (max-width: 900px) {
+  .hero-in { grid-template-columns: 1fr; padding-top: 38px; padding-bottom: 38px; }
+  .hero-tiles { display: none; }
+  .hh { font-size: 27px; }
+  .qk { grid-template-columns: repeat(2, 1fr); }
+  .grid { grid-template-columns: repeat(2, 1fr); }
 }
-.cta-inner { max-width: 600px; margin: 0 auto; padding: 0 24px; }
-.cta-inner h2 { font-size: 32px; font-weight: 700; color: #fff; margin-bottom: 12px; }
-.cta-inner p { font-size: 16px; color: rgba(255,255,255,0.8); margin-bottom: 32px; }
-.cta-inner .btn-primary {
-  background: #fff;
-  color: var(--color-primary);
-  border-color: #fff;
-  font-weight: 600;
-}
-.cta-inner .btn-primary:hover { background: #f0f7ff; }
-
-/* 푸터 */
-.footer {
-  background: var(--color-text-primary);
-  padding: 32px 0;
-}
-.footer-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.footer-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-}
-.footer-logo img { width: 28px; height: 28px; border-radius: 6px; }
-.footer-copy { font-size: 13px; color: rgba(255,255,255,0.5); }
 </style>

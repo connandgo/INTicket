@@ -1,128 +1,102 @@
 <template>
-  <header class="app-header">
-    <div class="header-inner">
-      <!-- 로고 -->
-      <router-link to="/" class="logo">
-        <img src="@/assets/images/logo/main_logo.png" alt="LearnNexus" class="logo-img" />
-        <span class="logo-text">LearnNexus</span>
-      </router-link>
-
-      <!-- 네비게이션 -->
-      <nav class="nav-links" v-if="auth.isAuthenticated">
-        <router-link to="/courses" class="nav-link" :class="{ active: $route.path.startsWith('/courses') }">강의</router-link>
-        <router-link to="/enrollments" class="nav-link" :class="{ active: $route.path === '/enrollments' }">내 학습</router-link>
-      </nav>
-
-      <!-- 우측 액션 -->
-      <div class="header-actions">
+  <header class="hd">
+    <!-- 상단 유틸 -->
+    <div class="util">
+      <div class="wrap util-in">
         <template v-if="auth.isAuthenticated">
-          <router-link to="/mypage" class="user-avatar" :title="auth.user?.name">
-            {{ auth.user?.name?.charAt(0) || '?' }}
-          </router-link>
-          <button class="btn btn-ghost btn-sm" @click="handleLogout">로그아웃</button>
+          <span class="hi"><b>{{ auth.user?.name || '회원' }}</b>님 · {{ roleLabel }}</span>
+          <router-link to="/enrollments" class="ul">내 예매</router-link>
+          <router-link to="/mypage" class="ul">마이페이지</router-link>
+          <button class="ul" @click="signOut">로그아웃</button>
         </template>
         <template v-else>
-          <router-link to="/login" class="btn btn-ghost btn-sm">로그인</router-link>
-          <router-link to="/login" class="btn btn-primary btn-sm">시작하기</router-link>
+          <router-link to="/login" class="ul">로그인</router-link>
+          <router-link to="/login" class="ul">회원가입</router-link>
         </template>
+      </div>
+    </div>
+
+    <!-- 메인 -->
+    <div class="main">
+      <div class="wrap main-in">
+        <router-link to="/" class="logo">
+          <span class="logo-mk">IN</span>
+          <span class="logo-tx">티켓</span>
+        </router-link>
+
+        <nav class="nav">
+          <router-link to="/courses" class="nv" :class="{ on: isCourses }">공연</router-link>
+          <router-link v-if="auth.isAuthenticated" to="/enrollments" class="nv" :class="{ on: $route.path === '/enrollments' }">예매확인</router-link>
+          <router-link v-if="isPlanner" to="/courses/new" class="nv" :class="{ on: $route.path === '/courses/new' }">공연등록</router-link>
+        </nav>
+
+        <router-link v-if="!auth.isAuthenticated" to="/login" class="btn btn-red btn-sm cta">로그인하고 예매</router-link>
       </div>
     </div>
   </header>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth.js'
-import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 
-function handleLogout() {
-  auth.logout()
+// STUDENT/INSTRUCTOR 값은 그대로 두고 화면 표시만 바꾼다(명세서 4.1)
+const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
+const roleLabel = computed(() => (isPlanner.value ? '공연기획사' : '관람객'))
+const isCourses = computed(() => route.path === '/courses' || route.path.startsWith('/courses/') && route.path !== '/courses/new')
+
+function signOut() {
+  auth.logout(false)
   router.push('/')
 }
 </script>
 
 <style scoped>
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--color-border);
+.hd { border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 40; }
+
+.util { background: var(--bg-soft); border-bottom: 1px solid var(--line); }
+.util-in { height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.hi { font-size: 12px; color: var(--t3); margin-right: auto; }
+.hi b { color: var(--t1); font-weight: 600; }
+.ul { font-size: 12px; color: var(--t2); }
+.ul:hover { color: var(--red); text-decoration: underline; text-underline-offset: 2px; }
+
+.main-in { height: 58px; display: flex; align-items: center; gap: 34px; }
+.logo { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.logo-mk {
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  background: var(--red); color: #fff;
+  font-family: var(--num);
+  font-size: 13px; font-weight: 700;
+  border-radius: var(--r);
 }
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  gap: 32px;
-}
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.logo-img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 8px;
-}
-.logo-text {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: -0.3px;
-}
-.nav-links {
-  display: flex;
-  gap: 4px;
-  flex: 1;
-}
-.nav-link {
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  transition: var(--transition);
-}
-.nav-link:hover,
-.nav-link.active {
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-.btn-sm {
-  padding: 7px 16px;
-  font-size: 13px;
-}
-.user-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-size: 13px;
+.logo-tx { font-size: 19px; font-weight: 800; letter-spacing: -0.05em; color: var(--navy); }
+
+.nav { display: flex; gap: 26px; }
+.nv {
+  font-size: 15.5px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: var(--transition);
+  letter-spacing: -0.04em;
+  color: var(--t2);
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
 }
-.user-avatar:hover {
-  background: var(--color-primary);
-  color: #fff;
+.nv:hover { color: var(--t1); }
+.nv.on { color: var(--red); border-bottom-color: var(--red); }
+
+.cta { margin-left: auto; }
+
+@media (max-width: 760px) {
+  .main-in { height: 52px; gap: 18px; }
+  .nav { gap: 16px; }
+  .nv { font-size: 14px; }
+  .hi { display: none; }
+  .cta { display: none; }
 }
 </style>
