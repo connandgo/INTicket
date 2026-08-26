@@ -1,376 +1,121 @@
 <template>
-  <div class="page-wrapper">
+  <div>
     <AppHeader />
-    <div class="page-layout">
-      <aside class="sidebar">
-        <div class="sidebar-section">
-          <div class="sidebar-label">메뉴</div>
 
-          <router-link to="/courses" class="sidebar-item">
-            <span class="si-icon">📚</span> 강의 목록
-          </router-link>
+    <main class="wrap page">
+      <h1 class="ptitle">
+        내 예매
+        <span class="cnt">{{ store.items.length }}건</span>
+      </h1>
 
-          <router-link
-            v-if="!isInstructor"
-            to="/enrollments"
-            class="sidebar-item active"
-          >
-            <span class="si-icon">✅</span> 내 수강 목록
-          </router-link>
+      <div v-if="store.loading" class="load"><span class="spin"></span>예매 내역을 불러오는 중입니다</div>
 
-          <router-link to="/mypage" class="sidebar-item">
-            <span class="si-icon">⭐</span> 마이페이지
-          </router-link>
-        </div>
+      <div v-else-if="store.error" class="blank">
+        <h3>예매 내역을 불러오지 못했습니다</h3>
+        <p>{{ store.error }}</p>
+        <button class="btn btn-line btn-sm" style="margin-top:14px" @click="store.fetchMine()">다시 시도</button>
+      </div>
 
-        <div class="sidebar-section">
-          <div class="sidebar-label">계정</div>
-          <router-link to="/mypage" class="sidebar-item">
-            <span class="si-icon">👤</span> 마이페이지
-          </router-link>
-          <button class="sidebar-item sidebar-btn" @click="handleLogout">
-            <span class="si-icon">🚪</span> 로그아웃
-          </button>
-        </div>
-      </aside>
+      <div v-else-if="!store.items.length" class="blank">
+        <h3>예매한 공연이 없습니다</h3>
+        <p>공연을 둘러보고 마음에 드는 공연을 예매해 보세요.</p>
+        <router-link to="/courses" class="btn btn-red btn-sm" style="margin-top:14px">공연 보러 가기</router-link>
+      </div>
 
-      <main class="main-content">
-        <h1 class="page-title">내 수강 목록</h1>
+      <template v-else>
+        <p v-if="hasPending" class="alert alert-info pend">
+          결제 처리 중인 예매가 있습니다. 결제가 끝나면 예매 확정으로 바뀝니다.
+          <button class="refresh" @click="store.fetchMine()">새로고침</button>
+        </p>
 
-        <div v-if="loading" class="loading-center">
-          <div class="spinner"></div>
-        </div>
+        <ul class="rows">
+          <li v-for="e in store.items" :key="e.id" class="row">
+            <router-link :to="`/courses/${e.courseId}`" class="rposter">
+              <PosterArt :id="e.courseId" :title="title(e)" :genre="genre(e)" />
+            </router-link>
 
-        <div v-else-if="enrollments.length" class="enrollment-list fade-in">
-          <div v-for="item in enrollments" :key="item.id" class="enrollment-card">
-            <div class="enroll-thumb" :class="getThumbBg(item.course?.category)">
-              <img :src="getThumbSrc(item.course)" :alt="item.course?.title" />
+            <div class="rmain">
+              <span class="bdg bdg-gray">{{ genre(e) }}</span>
+              <router-link :to="`/courses/${e.courseId}`" class="rttl">{{ title(e) }}</router-link>
+              <dl class="meta num">
+                <div><dt>예매번호</dt><dd>{{ e.id }}</dd></div>
+                <div><dt>공연 ID</dt><dd>{{ e.courseId }}</dd></div>
+                <div v-if="e.createdAt"><dt>예매일</dt><dd>{{ fmt(e.createdAt) }}</dd></div>
+              </dl>
             </div>
 
-            <div class="enroll-info">
-              <span class="badge" :class="getBadge(item.course?.category)">
-                {{ item.course?.category }}
-              </span>
-              <h3 class="enroll-title">{{ item.course?.title }}</h3>
-              <p class="enroll-instructor">강사: {{ item.course?.instructorName }}</p>
+            <div class="rside">
+              <span class="bdg" :class="STATUS_STYLE[e.status]">{{ STATUS_LABEL[e.status] }}</span>
+              <span v-if="e.course?.price" class="rprice num">{{ Number(e.course.price).toLocaleString() }}원</span>
             </div>
+          </li>
+        </ul>
 
-            <div class="enroll-status">
-              <span
-                :class="[
-                  'status-badge',
-                  item.status === 'ACTIVE' ? 'status-active' : 'status-pending'
-                ]"
-              >
-                {{ item.status === 'ACTIVE' ? '수강 중' : '대기 중' }}
-              </span>
-              <router-link :to="`/courses/${item.courseId}`" class="btn btn-ghost btn-sm">
-                강의 보기
-              </router-link>
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="empty-state">
-          <p class="empty-icon">📭</p>
-          <p>수강 중인 강의가 없습니다.</p>
-          <router-link to="/courses" class="btn btn-primary" style="margin-top:16px;">
-            강의 둘러보기
-          </router-link>
-        </div>
-      </main>
-    </div>
+        <p class="foot-note small muted">
+          이번 버전에서는 예매 취소와 환불을 지원하지 않습니다.
+        </p>
+      </template>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
-import { enrollmentApi } from '@/api/enrollment.js'
-import { useAuthStore } from '@/store/auth.js'
+import PosterArt from '@/components/PosterArt.vue'
+import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
+import { genreLabel } from '@/domain/genre.js'
 
-const router = useRouter()
-const auth = useAuthStore()
+const store = useEnrollmentStore()
+const hasPending = computed(() => store.items.some((e) => e.status === 'PENDING'))
 
-const enrollments = ref([])
-const loading = ref(true)
+onMounted(() => store.fetchMine())
 
-const isInstructor = computed(() => auth.user?.role === 'INSTRUCTOR')
-
-const categoryConfig = {
-  '백엔드': { bg: 'thumb-teal', badge: 'badge-teal', thumb: 'spring_boot' },
-  '프론트엔드': { bg: 'thumb-teal', badge: 'badge-teal', thumb: 'vue_js' },
-  'DevOps': { bg: 'thumb-blue', badge: 'badge-blue', thumb: 'kubernetes' },
-  '데이터': { bg: 'thumb-purple', badge: 'badge-purple', thumb: 'python' },
-  'AI': { bg: 'thumb-pink', badge: 'badge-pink', thumb: 'generative_ai' },
+// EnrollmentResponse.course(CourseSummary)는 비어 있을 수 있다. 없으면 ID로 버틴다.
+function title(e) {
+  return e.course?.title || `공연 #${e.courseId}`
 }
-
-function getThumbBg(cat) {
-  return categoryConfig[cat]?.bg || 'thumb-gray'
+function genre(e) {
+  return genreLabel(e.course?.category)
 }
-
-function getBadge(cat) {
-  return categoryConfig[cat]?.badge || 'badge-gray'
+function fmt(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-
-function getThumbSrc(course) {
-  const key = course?.thumbnail || categoryConfig[course?.category]?.thumb
-  if (!key) return ''
-  try {
-    return new URL(`../assets/images/courses/${key}.png`, import.meta.url).href
-  } catch {
-    return ''
-  }
-}
-
-function handleLogout() {
-  auth.logout()
-  router.push('/')
-}
-
-onMounted(async () => {
-  // 강사는 이 페이지 접근 불가 → 마이페이지로 이동
-  if (isInstructor.value) {
-    console.warn('[EnrollmentView] instructor tried to access /enrollments, redirect to /mypage')
-    router.replace('/mypage')
-    return
-  }
-
-  try {
-    const res = await enrollmentApi.getMyEnrollments()
-    console.log('[EnrollmentView] my enrollments response:', res.data)
-
-    if (Array.isArray(res.data?.data)) {
-      enrollments.value = res.data.data
-    } else if (Array.isArray(res.data)) {
-      enrollments.value = res.data
-    } else {
-      enrollments.value = []
-    }
-  } catch (error) {
-    console.error('[EnrollmentView] failed to load enrollments:', error)
-    enrollments.value = []
-  } finally {
-    loading.value = false
-  }
-})
 </script>
 
 <style scoped>
-.page-wrapper {
-  min-height: 100vh;
-  background: var(--color-bg-secondary);
-}
+.pend { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.refresh { margin-left: auto; font-size: 12.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
-.page-layout {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px;
+.rows { border-top: 2px solid var(--navy); }
+.row {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 28px;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sidebar-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
-}
-
-.sidebar-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-muted);
-  padding: 8px 12px 4px;
-}
-
-.sidebar-item {
-  display: flex;
+  grid-template-columns: 72px 1fr auto;
+  gap: 18px;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  transition: var(--transition);
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  text-decoration: none;
+  padding: 16px 6px;
+  border-bottom: 1px solid var(--line);
 }
+.rposter { width: 72px; border-radius: var(--r); overflow: hidden; }
+.rmain { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
+.rttl { font-size: 16px; font-weight: 700; letter-spacing: -0.04em; }
+.rttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
+.meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 2px; }
+.meta > div { display: flex; gap: 6px; font-size: 12px; }
+.meta dt { color: var(--t4); }
+.meta dd { color: var(--t2); }
 
-.sidebar-item:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-}
+.rside { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.rprice { font-size: 14px; font-weight: 700; }
 
-.sidebar-item.active {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-weight: 500;
-}
+.foot-note { margin-top: 16px; }
 
-.si-icon {
-  font-size: 15px;
-}
-
-.main-content {
-  min-width: 0;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin-bottom: 24px;
-}
-
-.enrollment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.enrollment-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  transition: var(--transition);
-}
-
-.enrollment-card:hover {
-  box-shadow: var(--shadow-sm);
-}
-
-.enroll-thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.enroll-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-}
-
-.thumb-teal {
-  background: #E1F5EE;
-}
-
-.thumb-blue {
-  background: #E6F1FB;
-}
-
-.thumb-purple {
-  background: #EEEDFE;
-}
-
-.thumb-pink {
-  background: #FBEAF0;
-}
-
-.thumb-gray {
-  background: #F1EFE8;
-}
-
-.enroll-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.enroll-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.enroll-instructor {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.enroll-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-active {
-  background: #E1F5EE;
-  color: #0F6E56;
-}
-
-.status-pending {
-  background: #FAEEDA;
-  color: #854F0B;
-}
-
-.btn-sm {
-  padding: 7px 14px;
-  font-size: 13px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--color-text-muted);
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.loading-center {
-  display: flex;
-  justify-content: center;
-  padding: 80px 0;
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+@media (max-width: 760px) {
+  .row { grid-template-columns: 56px 1fr; row-gap: 10px; }
+  .rposter { width: 56px; }
+  .rside { grid-column: 2; flex-direction: row; align-items: center; justify-content: flex-start; }
 }
 </style>
