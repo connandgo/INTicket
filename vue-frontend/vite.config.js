@@ -23,22 +23,12 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false
-      },
-      '/login': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
-      },
-      '/logout': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
-      },
-      '/userinfo': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
       }
+      // /login, /logout, /userinfo 는 프록시하지 않는다.
+      // /login 은 이 앱의 라우트라서, 프록시를 걸면 주소창에 직접 치거나
+      // 새로고침했을 때 SPA 대신 백엔드로 넘어가 Whitelabel 404가 뜬다.
+      // OAuth 로그인 화면은 VITE_AUTH_SERVER_URL(:8080)로 직접 이동하므로
+      // 이 포트에서 /login 을 넘겨줄 필요가 없다.
     }
   }
 })
