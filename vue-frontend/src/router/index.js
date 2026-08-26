@@ -30,6 +30,13 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    // 좌석등급 선택 · 선점 · 결제
+    path: '/courses/:id(\\d+)/booking',
+    name: 'Booking',
+    component: () => import('@/views/BookingView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     // UI-005 내 예매
     path: '/enrollments',
     name: 'Enrollment',
