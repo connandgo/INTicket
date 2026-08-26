@@ -1,86 +1,41 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { courseApi } from '@/api/course.js'
+import { genreLabel } from '@/domain/genre.js'
+
+// 서버 응답이 { success, data, message } 껍데기로 오기도 하고 그냥 오기도 한다.
+function unwrap(res) {
+  const d = res?.data
+  if (d && typeof d === 'object' && 'data' in d) return d.data
+  return d
+}
 
 export const useCourseStore = defineStore('course', () => {
   const courses = ref([])
-  const selectedCourse = ref(null)
+  const current = ref(null)
   const loading = ref(false)
   const error = ref(null)
-  const selectedCategory = ref('전체')
 
-  const categories = ['전체', '백엔드', '프론트엔드', 'DevOps', '데이터', 'AI']
+  const genre = ref('ALL')
 
-  // 백엔드 카테고리 → 프론트 표시용 카테고리
-  const categoryLabelMap = {
-    BACKEND: '백엔드',
-    FRONTEND: '프론트엔드',
-    DEVOPS: 'DevOps',
-    DATA: '데이터',
-    AI: 'AI'
-  }
+  const visible = computed(() =>
+    genre.value === 'ALL' ? courses.value : courses.value.filter((c) => c.category === genre.value)
+  )
 
-  // 썸네일 이미지 매핑
-  const thumbnailMap = {
-    SPRING: new URL('../assets/images/courses/spring_boot.png', import.meta.url).href,
-    VUE: new URL('../assets/images/courses/vue_js.png', import.meta.url).href,
-    DOCKER: new URL('../assets/images/courses/docker.png', import.meta.url).href,
-    KUBERNETES: new URL('../assets/images/courses/kubernetes.png', import.meta.url).href,
-    PYTHON: new URL('../assets/images/courses/python.png', import.meta.url).href,
-    AI: new URL('../assets/images/courses/generative_ai.png', import.meta.url).href,
-  }
-
-  const categoryThumbnailMap = {
-    '백엔드': thumbnailMap.SPRING,
-    '프론트엔드': thumbnailMap.VUE,
-    'DevOps': thumbnailMap.KUBERNETES,
-    '데이터': thumbnailMap.PYTHON,
-    'AI': thumbnailMap.AI
-  }
-
-  function normalizeCategory(category) {
-    if (!category) return ''
-    return categoryLabelMap[category] || category
-  }
-
-  function normalizeCourse(course) {
-    if (!course || typeof course !== 'object') return course
-
-    return {
-      ...course,
-      category: normalizeCategory(course.category)
-    }
-  }
-
-  function getThumbnail(course) {
-    const thumbKey = course?.thumbnail?.toUpperCase?.() || ''
-    if (thumbKey && thumbnailMap[thumbKey]) {
-      return thumbnailMap[thumbKey]
-    }
-
-    return categoryThumbnailMap[course?.category] || null
-  }
+  // 인기순 — 누적 예매 수 기준. 목록 상단 랭킹에 쓴다.
+  const ranked = computed(() =>
+    [...courses.value].sort((a, b) => (b.enrollmentCount || 0) - (a.enrollmentCount || 0))
+  )
 
   async function fetchCourses() {
     loading.value = true
     error.value = null
-
     try {
-      const res = await courseApi.getAll()
-      console.log('[CourseStore] fetchCourses response =', res.data)
-
-      const rawCourses = Array.isArray(res.data?.data)
-        ? res.data.data
-        : Array.isArray(res.data)
-          ? res.data
-          : []
-
-      courses.value = rawCourses.map(normalizeCourse)
-
-      console.log('[CourseStore] normalized courses =', courses.value)
+      const list = unwrap(await courseApi.getAll())
+      courses.value = Array.isArray(list) ? list : []
     } catch (e) {
-      console.error('[CourseStore] fetchCourses failed:', e)
-      error.value = e.message || '강의 목록을 불러오지 못했습니다.'
+      console.error('[course] 목록 조회 실패:', e)
+      error.value = message(e, '공연 목록을 불러오지 못했습니다.')
       courses.value = []
     } finally {
       loading.value = false
@@ -90,46 +45,36 @@ export const useCourseStore = defineStore('course', () => {
   async function fetchCourse(id) {
     loading.value = true
     error.value = null
-
+    current.value = null
     try {
-      const res = await courseApi.getById(id)
-      console.log('[CourseStore] fetchCourse response =', res.data)
-
-      const rawCourse =
-        res.data?.data && typeof res.data.data === 'object'
-          ? res.data.data
-          : res.data
-
-      selectedCourse.value = normalizeCourse(rawCourse)
-
-      console.log('[CourseStore] normalized selectedCourse =', selectedCourse.value)
+      const c = unwrap(await courseApi.getById(id))
+      current.value = c && typeof c === 'object' ? c : null
+      if (!current.value) error.value = '존재하지 않는 공연입니다.'
     } catch (e) {
-      console.error('[CourseStore] fetchCourse failed:', e)
-      error.value = e.message || '강의 정보를 불러오지 못했습니다.'
-      selectedCourse.value = null
+      console.error('[course] 상세 조회 실패:', e)
+      error.value = e.response?.status === 404
+        ? '존재하지 않는 공연입니다.'
+        : message(e, '공연 정보를 불러오지 못했습니다.')
     } finally {
       loading.value = false
     }
   }
 
-  function setCategory(cat) {
-    selectedCategory.value = cat
+  async function create(payload) {
+    const res = await courseApi.create(payload)
+    return unwrap(res)
+  }
+
+  function setGenre(code) {
+    genre.value = code
   }
 
   return {
-    courses,
-    selectedCourse,
-    loading,
-    error,
-    categories,
-    selectedCategory,
-    thumbnailMap,
-    categoryLabelMap,
-    normalizeCategory,
-    normalizeCourse,
-    getThumbnail,
-    fetchCourses,
-    fetchCourse,
-    setCategory
+    courses, current, loading, error, genre, visible, ranked,
+    fetchCourses, fetchCourse, create, setGenre, genreLabel
   }
 })
+
+function message(e, fallback) {
+  return e.response?.data?.message || fallback
+}

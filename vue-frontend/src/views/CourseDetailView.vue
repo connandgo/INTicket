@@ -1,415 +1,170 @@
 <template>
-  <div class="page-wrapper">
+  <div>
     <AppHeader />
 
-    <div class="detail-layout" v-if="course">
-      <div class="detail-hero">
-        <div class="detail-hero-inner">
-          <!-- 좌측 상세 정보 -->
-          <div class="detail-info fade-in-up">
-            <span class="badge" :class="badgeClass">{{ displayCategory }}</span>
-            <h1 class="detail-title">{{ course.title }}</h1>
-            <p class="detail-desc">
-              {{ course.description || '실무 전문가가 직접 설계한 커리큘럼으로 체계적으로 학습하세요.' }}
-            </p>
+    <main class="wrap page">
+      <div v-if="store.loading" class="load"><span class="spin"></span>공연 정보를 불러오는 중입니다</div>
 
-            <div class="detail-meta">
-              <span>강사: {{ displayInstructorName }}</span>
-              <span>수강생: {{ displayEnrollmentCount }}명</span>
-            </div>
+      <div v-else-if="!c" class="blank">
+        <h3>공연을 찾을 수 없습니다</h3>
+        <p>{{ store.error }}</p>
+        <router-link to="/courses" class="btn btn-line btn-sm" style="margin-top:14px">공연 목록으로</router-link>
+      </div>
+
+      <template v-else>
+        <nav class="crumb small">
+          <router-link to="/courses">공연</router-link>
+          <span>›</span>
+          <span>{{ label }}</span>
+        </nav>
+
+        <div class="top">
+          <div class="poster">
+            <PosterArt :id="c.id" :title="c.title" :genre="label" />
           </div>
 
-          <!-- 우측 결제/수강 카드 -->
-          <div class="enroll-card fade-in">
-            <div class="enroll-thumb" :class="thumbBg">
-              <img v-if="thumbSrc" :src="thumbSrc" :alt="course.title" />
-            </div>
+          <div class="side">
+            <span class="bdg bdg-red">{{ label }}</span>
+            <h1 class="ttl">{{ c.title }}</h1>
 
-            <div class="enroll-body">
-              <div class="enroll-price">₩{{ displayPrice }}</div>
+            <dl class="dl">
+              <div><dt>장르</dt><dd>{{ label }}</dd></div>
+              <div><dt>티켓 가격</dt><dd><b class="price num">{{ price }}원</b> <span class="small muted">1매 기준</span></dd></div>
+              <div><dt>누적 예매</dt><dd class="num">{{ (c.enrollmentCount || 0).toLocaleString() }}건</dd></div>
+              <div><dt>기획사</dt><dd class="num muted">ID {{ c.instructorId }}</dd></div>
+              <div><dt>예매 상태</dt><dd>{{ c.status === 'ACTIVE' ? '예매 가능' : '예매 중지' }}</dd></div>
+            </dl>
+
+            <!-- 예매 -->
+            <div class="act">
+              <p v-if="mine" class="alert" :class="mine.status === 'ACTIVE' ? 'alert-ok' : 'alert-info'">
+                이미 예매하신 공연입니다 — <b>{{ STATUS_LABEL[mine.status] }}</b>
+              </p>
+              <p v-else-if="done" class="alert alert-ok">
+                예매가 접수되었습니다. 결제가 끝나면 예매 확정으로 바뀝니다.
+              </p>
+              <p v-else-if="err" class="alert alert-err">{{ err }}</p>
 
               <button
-                class="btn btn-primary btn-full"
-                @click="handlePrimaryAction"
-                :disabled="buttonDisabled"
-                :class="{ 'btn-disabled': buttonDisabled }"
+                v-if="!mine"
+                class="btn btn-red btn-lg btn-wide"
+                :disabled="booking || c.status !== 'ACTIVE' || !isViewer"
+                @click="book"
               >
-                <span v-if="enrolling">처리 중...</span>
-                <span v-else>{{ buttonLabel }}</span>
+                <span v-if="booking" class="spin spin-w"></span>
+                {{ booking ? '예매 처리 중' : '예매하기' }}
               </button>
+              <router-link v-else to="/enrollments" class="btn btn-navy btn-lg btn-wide">내 예매 확인</router-link>
 
-              <div v-if="enrollError" class="error-msg">{{ enrollError }}</div>
-
-              <p class="helper-text" v-if="helperText">
-                {{ helperText }}
+              <p v-if="!isViewer" class="fhint">
+                공연기획사 계정은 예매할 수 없습니다. 관람객 계정으로 로그인해 주세요.
               </p>
-
-              <ul class="enroll-info-list">
-                <li>✅ 즉시 수강 가능</li>
-                <li>✅ 평생 소장</li>
-                <li>✅ 수료증 발급</li>
-              </ul>
+              <p class="fhint">1인 1매 기준이며, 같은 공연은 중복 예매할 수 없습니다.</p>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div v-else-if="loading" class="loading-center">
-      <div class="spinner"></div>
-    </div>
+        <section class="body">
+          <h2 class="stitle">공연 소개</h2>
+          <p v-if="c.description" class="desc">{{ c.description }}</p>
+          <p v-else class="desc muted">등록된 공연 소개가 없습니다.</p>
+        </section>
 
-    <div v-else class="loading-center">
-      <p class="empty-text">강의 정보를 불러오지 못했습니다.</p>
-    </div>
+        <section class="body">
+          <h2 class="stitle">예매 안내</h2>
+          <ul class="notice">
+            <li>예매 신청 후 모의 결제가 자동으로 진행되며, 결제가 완료되면 예매 확정으로 바뀝니다.</li>
+            <li>결제 처리 중 상태는 <router-link to="/enrollments" class="lk">내 예매</router-link>에서 확인할 수 있습니다.</li>
+            <li>이번 버전에서는 예매 취소와 환불을 지원하지 않습니다.</li>
+          </ul>
+        </section>
+      </template>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
+import PosterArt from '@/components/PosterArt.vue'
 import { useCourseStore } from '@/store/course.js'
-import { enrollmentApi } from '@/api/enrollment.js'
+import { useEnrollmentStore, STATUS_LABEL } from '@/store/enrollment.js'
 import { useAuthStore } from '@/store/auth.js'
+import { genreLabel } from '@/domain/genre.js'
 
 const route = useRoute()
-const router = useRouter()
-const courseStore = useCourseStore()
+const store = useCourseStore()
+const enroll = useEnrollmentStore()
 const auth = useAuthStore()
 
-const enrolling = ref(false)
-const enrollError = ref('')
-const enrollmentStatus = ref('NONE') // NONE | PENDING | ACTIVE
+const c = computed(() => store.current)
+const label = computed(() => genreLabel(c.value?.category))
+const price = computed(() => Number(c.value?.price || 0).toLocaleString())
+const isViewer = computed(() => auth.user?.role !== 'INSTRUCTOR')
 
-const course = computed(() => courseStore.selectedCourse)
-const loading = computed(() => courseStore.loading)
-const isInstructor = computed(() => auth.user?.role === 'INSTRUCTOR')
+const booking = ref(false)
+const done = ref(false)
+const err = ref('')
 
-const categoryConfig = {
-  '백엔드': { badge: 'badge-teal', bg: 'thumb-teal', thumb: 'spring_boot' },
-  '프론트엔드': { badge: 'badge-teal', bg: 'thumb-teal', thumb: 'vue_js' },
-  'DevOps': { badge: 'badge-blue', bg: 'thumb-blue', thumb: 'kubernetes' },
-  '데이터': { badge: 'badge-purple', bg: 'thumb-purple', thumb: 'python' },
-  'AI': { badge: 'badge-pink', bg: 'thumb-pink', thumb: 'generative_ai' },
-}
-
-const config = computed(() => categoryConfig[course.value?.category] || {})
-const badgeClass = computed(() => config.value.badge || 'badge-gray')
-const thumbBg = computed(() => config.value.bg || 'thumb-gray')
-
-const displayCategory = computed(() => course.value?.category || '-')
-
-const displayInstructorName = computed(() => {
-  return (
-    course.value?.instructorName ||
-    course.value?.teacherName ||
-    course.value?.instructor?.name ||
-    course.value?.instructor_name ||
-    course.value?.ownerName ||
-    '강사 정보 없음'
-  )
-})
-
-const displayEnrollmentCount = computed(() => {
-  const value = Number(
-    course.value?.enrollmentCount ??
-    course.value?.enrollment_count ??
-    0
-  )
-  return Number.isNaN(value) ? 0 : value.toLocaleString()
-})
-
-const displayPrice = computed(() => {
-  const value = Number(course.value?.price ?? 0)
-  return Number.isNaN(value) ? '0' : value.toLocaleString()
-})
-
-const thumbSrc = computed(() => {
-  const key = course.value?.thumbnail || config.value.thumb
-  if (!key) return null
-
-  try {
-    return new URL(`../assets/images/courses/${key}.png`, import.meta.url).href
-  } catch {
-    return null
-  }
-})
-
-const buttonLabel = computed(() => {
-  if (isInstructor.value) return '강사 계정은 신청 불가'
-  if (enrollmentStatus.value === 'ACTIVE') return '내 수강 목록으로 이동'
-  if (enrollmentStatus.value === 'PENDING') return '신청 완료 · 결제 처리 중'
-  return '결제하고 수강하기'
-})
-
-const buttonDisabled = computed(() => {
-  if (enrolling.value) return true
-  if (isInstructor.value) return true
-  if (enrollmentStatus.value === 'PENDING') return true
-  return false
-})
-
-const helperText = computed(() => {
-  if (isInstructor.value) {
-    return '강사 계정은 본인 강의를 수강 신청할 수 없습니다.'
-  }
-
-  if (enrollmentStatus.value === 'ACTIVE') {
-    return '이미 수강 중인 강의입니다. 내 수강 목록에서 바로 이어서 학습할 수 있습니다.'
-  }
-
-  if (enrollmentStatus.value === 'PENDING') {
-    return '수강 신청이 접수되었습니다. 결제/처리 상태가 반영되면 내 수강 목록에서 확인할 수 있습니다.'
-  }
-
-  return '결제를 진행하면 수강 신청이 함께 처리됩니다.'
-})
-
-async function loadEnrollmentStatus() {
-  if (!auth.user?.id || !course.value?.id || isInstructor.value) {
-    enrollmentStatus.value = 'NONE'
-    return
-  }
-
-  try {
-    const res = await enrollmentApi.getMyEnrollments()
-    console.log('[CourseDetail] my enrollments response =', res.data)
-
-    const enrollments = Array.isArray(res.data?.data)
-      ? res.data.data
-      : Array.isArray(res.data)
-        ? res.data
-        : []
-
-    const matched = enrollments.find(item => Number(item.courseId) === Number(course.value.id))
-
-    if (!matched) {
-      enrollmentStatus.value = 'NONE'
-      return
-    }
-
-    enrollmentStatus.value = matched.status === 'ACTIVE' ? 'ACTIVE' : 'PENDING'
-  } catch (e) {
-    console.error('[CourseDetail] failed to load enrollment status:', e)
-    enrollmentStatus.value = 'NONE'
-  }
-}
-
-async function handlePrimaryAction() {
-  enrollError.value = ''
-
-  if (!course.value?.id) {
-    enrollError.value = '강의 정보가 올바르지 않습니다.'
-    return
-  }
-
-  if (isInstructor.value) {
-    enrollError.value = '강사 계정은 본인 강의를 수강 신청할 수 없습니다.'
-    return
-  }
-
-  if (enrollmentStatus.value === 'ACTIVE') {
-    router.push('/enrollments')
-    return
-  }
-
-  if (enrollmentStatus.value === 'PENDING') {
-    return
-  }
-
-  enrolling.value = true
-
-  try {
-    await enrollmentApi.enroll(course.value.id)
-    enrollmentStatus.value = 'PENDING'
-  } catch (e) {
-    console.error('[CourseDetail] enroll failed:', e)
-    enrollError.value = e.response?.data?.message || '결제/수강 신청에 실패했습니다.'
-  } finally {
-    enrolling.value = false
-  }
-}
+const mine = computed(() => enroll.findByCourse(route.params.id))
 
 onMounted(async () => {
-  await courseStore.fetchCourse(route.params.id)
-  console.log('[CourseDetail] selectedCourse =', courseStore.selectedCourse)
-  await loadEnrollmentStatus()
+  await store.fetchCourse(route.params.id)
+  if (isViewer.value) await enroll.fetchMine()
 })
 
-watch(
-  () => courseStore.selectedCourse,
-  async (value) => {
-    console.log('[CourseDetail] selectedCourse changed =', value)
-    if (value?.id) {
-      await loadEnrollmentStatus()
-    }
-  },
-  { deep: true }
-)
+async function book() {
+  booking.value = true
+  err.value = ''
+  done.value = false
+  try {
+    await enroll.book(Number(route.params.id))
+    done.value = true
+    // 누적 예매 수가 바뀌었을 수 있으니 상세를 다시 읽는다
+    await store.fetchCourse(route.params.id)
+  } catch (e) {
+    console.error('[detail] 예매 실패:', e)
+    err.value =
+      e.response?.status === 409
+        ? '이미 예매한 공연입니다.'
+        : e.response?.data?.message || '예매에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    booking.value = false
+  }
+}
 </script>
 
 <style scoped>
-.page-wrapper {
-  min-height: 100vh;
-  background: var(--color-bg-secondary);
-}
+.crumb { display: flex; gap: 7px; color: var(--t3); margin-bottom: 16px; }
+.crumb a:hover { color: var(--red); }
 
-.detail-hero {
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
-  border-bottom: 1px solid var(--color-border);
-  padding: 48px 0;
-}
+.top { display: grid; grid-template-columns: 300px 1fr; gap: 34px; align-items: start; }
+.poster { border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow); }
 
-.detail-hero-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 24px;
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 48px;
-  align-items: start;
-}
+.side { display: flex; flex-direction: column; gap: 12px; }
+.ttl { font-size: 27px; font-weight: 800; line-height: 1.28; letter-spacing: -0.05em; }
+.price { font-size: 19px; font-weight: 800; color: var(--red); }
 
-.detail-info {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+.act { margin-top: 6px; display: flex; flex-direction: column; gap: 10px; }
+.spin-w { border-color: rgba(255,255,255,.4); border-top-color: #fff; width: 15px; height: 15px; }
 
-.detail-title {
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.detail-desc {
-  font-size: 15px;
-  color: var(--color-text-secondary);
+.body { margin-top: 46px; }
+.desc { font-size: 14.5px; line-height: 1.85; color: var(--t2); white-space: pre-wrap; }
+.notice { display: flex; flex-direction: column; gap: 7px; }
+.notice li {
+  position: relative;
+  padding-left: 12px;
+  font-size: 13.5px;
+  color: var(--t2);
   line-height: 1.7;
 }
+.notice li::before { content: ''; position: absolute; left: 0; top: 10px; width: 3px; height: 3px; border-radius: 50%; background: var(--t4); }
+.lk { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 
-.detail-meta {
-  display: flex;
-  gap: 20px;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  flex-wrap: wrap;
-}
-
-.enroll-card {
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
-}
-
-.enroll-thumb {
-  height: 160px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.enroll-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 20px;
-}
-
-.thumb-teal { background: #E1F5EE; }
-.thumb-blue { background: #E6F1FB; }
-.thumb-purple { background: #EEEDFE; }
-.thumb-pink { background: #FBEAF0; }
-.thumb-gray { background: #F1EFE8; }
-
-.enroll-body {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.enroll-price {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.btn-full {
-  width: 100%;
-  padding: 13px;
-  font-size: 15px;
-  justify-content: center;
-}
-
-.btn-disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.enroll-info-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.enroll-info-list li {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.error-msg {
-  font-size: 13px;
-  color: #dc2626;
-  padding: 8px 12px;
-  background: #fef2f2;
-  border-radius: var(--radius-sm);
-}
-
-.helper-text {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
-
-.empty-text {
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-
-.loading-center {
-  display: flex;
-  justify-content: center;
-  padding: 100px 0;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.badge-gray {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 900px) {
-  .detail-hero-inner {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 860px) {
+  .top { grid-template-columns: 1fr; gap: 22px; }
+  .poster { max-width: 240px; }
+  .ttl { font-size: 22px; }
 }
 </style>
