@@ -3,6 +3,7 @@ package com.lecture.course.config;
 import com.lecture.course.dto.CourseDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +17,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<CourseDto.ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest()
+                .body(CourseDto.ApiResponse.error(e.getMessage()));
+    }
+
+    // CourseController의 INSTRUCTOR(공연기획사) 권한 검증 실패 시 403으로 응답
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<CourseDto.ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(CourseDto.ApiResponse.error(e.getMessage()));
     }
 

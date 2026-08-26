@@ -42,6 +42,14 @@ public class EnrollmentKafkaConsumer {
             Long userId = ((Number) userIdValue).longValue();
             Long courseId = ((Number) courseIdValue).longValue();
 
+            // payment-service는 현재 성공시에만 COMPLETED로 발행하지만, 향후 FAILED 발행 대비 방어
+            Object statusValue = event.get("status");
+            if (!"COMPLETED".equals(statusValue)) {
+                log.warn("[Kafka Consumer] status가 COMPLETED가 아니므로 무시 - status: {}, userId: {}, courseId: {}",
+                        statusValue, userId, courseId);
+                return;
+            }
+
             log.info("[Kafka Consumer] payment.completed 파싱 완료 - userId: {}, courseId: {}",
                     userId, courseId);
 
