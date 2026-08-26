@@ -15,6 +15,9 @@ export const useCourseStore = defineStore('course', () => {
   const current = ref(null)
   const loading = ref(false)
   const error = ref(null)
+  // 실서버는 공연 목록에도 인증을 요구한다(게이트웨이 정책).
+  // 로그인 안내와 진짜 장애를 화면에서 구분하려고 따로 둔다.
+  const needsLogin = ref(false)
 
   const genre = ref('ALL')
 
@@ -30,12 +33,14 @@ export const useCourseStore = defineStore('course', () => {
   async function fetchCourses() {
     loading.value = true
     error.value = null
+    needsLogin.value = false
     try {
       const list = unwrap(await courseApi.getAll())
       courses.value = Array.isArray(list) ? list : []
     } catch (e) {
       console.error('[course] 목록 조회 실패:', e)
-      error.value = message(e, '공연 목록을 불러오지 못했습니다.')
+      if (e.response?.status === 401) needsLogin.value = true
+      else error.value = message(e, '공연 목록을 불러오지 못했습니다.')
       courses.value = []
     } finally {
       loading.value = false
@@ -45,6 +50,7 @@ export const useCourseStore = defineStore('course', () => {
   async function fetchCourse(id) {
     loading.value = true
     error.value = null
+    needsLogin.value = false
     current.value = null
     try {
       const c = unwrap(await courseApi.getById(id))
@@ -53,6 +59,7 @@ export const useCourseStore = defineStore('course', () => {
     } catch (e) {
       console.error('[course] 상세 조회 실패:', e)
       // 백엔드는 없는 id에 404가 아니라 400 + "강의를 찾을 수 없습니다"로 답한다
+      if (e.response?.status === 401) { needsLogin.value = true; return }
       const notFound = e.response?.status === 404 ||
         (e.response?.status === 400 && /찾을 수 없|존재하지 않/.test(e.response?.data?.message || ''))
       error.value = notFound
@@ -73,7 +80,7 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   return {
-    courses, current, loading, error, genre, visible, ranked,
+    courses, current, loading, error, needsLogin, genre, visible, ranked,
     fetchCourses, fetchCourse, create, setGenre, genreLabel
   }
 })

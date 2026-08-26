@@ -5,6 +5,12 @@
     <main class="wrap page">
       <div v-if="store.loading" class="load"><span class="spin"></span>공연 정보를 불러오는 중입니다</div>
 
+      <div v-else-if="store.needsLogin" class="blank">
+        <h3>로그인하면 공연 정보를 볼 수 있습니다</h3>
+        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
+        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
+      </div>
+
       <div v-else-if="!c" class="blank">
         <h3>공연을 찾을 수 없습니다</h3>
         <p>{{ store.error }}</p>
@@ -31,7 +37,10 @@
               <div><dt>예매 상태</dt><dd>{{ c.status === 'ACTIVE' ? '예매 가능' : '예매 중지' }}</dd></div>
             </dl>
 
-            <p v-if="!isViewer" class="alert alert-info">
+            <p v-if="!auth.isAuthenticated" class="alert alert-info">
+              공연 정보는 로그인 없이 보실 수 있습니다. 예매하려면 로그인이 필요합니다.
+            </p>
+            <p v-else-if="!isViewer" class="alert alert-info">
               공연기획사 계정입니다. 예매는 관람객 계정으로만 가능합니다.
             </p>
           </div>
@@ -67,7 +76,12 @@
               </ul>
 
               <router-link
-                v-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'"
+                v-if="!auth.isAuthenticated && totalLeft(r) > 0 && c.status === 'ACTIVE'"
+                to="/login"
+                class="btn btn-line btn-sm rd-go"
+              >로그인 후 예매</router-link>
+              <router-link
+                v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'"
                 :to="`/courses/${c.id}/booking?round=${r.id}`"
                 class="btn btn-red btn-sm rd-go"
               >예매하기</router-link>

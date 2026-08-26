@@ -13,9 +13,7 @@
           </h1>
           <p class="hp">뮤지컬 · 연극 · 콘서트 · 클래식 공연을 한 곳에서 찾고 예매합니다.</p>
           <div class="hbtn">
-            <router-link :to="auth.isAuthenticated ? '/courses' : '/login'" class="btn btn-red btn-lg">
-              {{ auth.isAuthenticated ? '공연 보러 가기' : '로그인하고 예매하기' }}
-            </router-link>
+            <router-link to="/courses" class="btn btn-red btn-lg">공연 보러 가기</router-link>
             <router-link v-if="auth.isAuthenticated" to="/enrollments" class="btn btn-line btn-lg">내 예매 확인</router-link>
           </div>
         </div>
@@ -33,7 +31,7 @@
       <router-link
         v-for="g in GENRES"
         :key="g.code"
-        :to="auth.isAuthenticated ? '/courses' : '/login'"
+        to="/courses"
         class="qk-i"
         @click="pick(g.code)"
       >
@@ -46,9 +44,9 @@
     <section class="wrap rank">
       <h2 class="stitle">인기 공연</h2>
 
-      <div v-if="!auth.isAuthenticated" class="blank">
-        <h3>로그인하면 공연 목록을 볼 수 있습니다</h3>
-        <p>관람객 또는 공연기획사 계정으로 로그인해 주세요.</p>
+      <div v-if="store.needsLogin" class="blank">
+        <h3>로그인하면 인기 공연을 볼 수 있습니다</h3>
+        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
         <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
       </div>
 
@@ -72,7 +70,7 @@
     <footer class="ft">
       <div class="wrap ft-in">
         <p class="ft-n">INTicket</p>
-        <p class="small muted">공연 예매 MVP · 회차와 좌석 지정은 지원하지 않습니다</p>
+        <p class="small muted">공연 예매 MVP · 좌석은 등급으로 예매되며 개별 좌석 지정은 지원하지 않습니다</p>
       </div>
     </footer>
   </div>
@@ -95,9 +93,8 @@ function pick(code) {
   store.setGenre(code)
 }
 
-onMounted(() => {
-  if (auth.isAuthenticated) store.fetchCourses()
-})
+// 로그인 없이도 인기 공연은 보여 준다. 예매 단계에서만 로그인을 요구한다.
+onMounted(() => store.fetchCourses())
 </script>
 
 <style scoped>
