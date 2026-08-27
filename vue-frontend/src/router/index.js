@@ -37,6 +37,13 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    // AI 좌석 매칭 (Sprint2, B2C) — 자연어로 원하는 자리 요청
+    path: '/courses/:id(\\d+)/seat-wish',
+    name: 'SeatWish',
+    component: () => import('@/views/SeatWishView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     // AI 수요 분석 (Sprint2, B2B) — 공연기획사만
     path: '/courses/:id(\\d+)/insights',
     name: 'DemandInsight',

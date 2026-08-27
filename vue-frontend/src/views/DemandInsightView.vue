@@ -15,9 +15,16 @@
         <router-link to="/mypage" class="close" aria-label="닫기">✕</router-link>
       </header>
 
-      <div v-if="loading" class="load"><span class="spin"></span>분석하는 중입니다</div>
+      <!-- 기획사는 자사 공연만 볼 수 있다. 주소로 남의 공연 id 를 넣어도 막는다. -->
+      <div v-if="!loading && !isMine" class="blank">
+        <h3>다른 기획사의 공연입니다</h3>
+        <p>자사가 등록한 공연의 수요 분석만 확인할 수 있습니다.</p>
+        <router-link to="/mypage" class="btn btn-line btn-sm" style="margin-top:14px">내 공연 목록으로</router-link>
+      </div>
 
-      <template v-else-if="a">
+      <div v-else-if="loading" class="load"><span class="spin"></span>분석하는 중입니다</div>
+
+      <template v-else-if="a && isMine">
         <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
           AI 서비스가 아직 예측을 제공하지 않아 <b>대기·판매 데이터 기반 임시 추정치</b>로 표시하고 있습니다.
           <code>GET /api/recommend/forecast/{{ course.id }}</code> 가 실제 결과를 돌려주면 그대로 대체됩니다.
@@ -214,12 +221,18 @@ import DemandTrendChart from '@/components/DemandTrendChart.vue'
 import { useCourseStore } from '@/store/course.js'
 import { forecastApi } from '@/api/forecast.js'
 import { genreLabel } from '@/domain/genre.js'
+import { useAuthStore } from '@/store/auth.js'
 
 const route = useRoute()
 const store = useCourseStore()
+const auth = useAuthStore()
 
 const course = computed(() => store.current)
 const genre = computed(() => genreLabel(course.value?.category))
+// 자사 공연인지. 기획사 = 회사 단위라 남의 공연 데이터를 보면 안 된다.
+const isMine = computed(
+  () => !!course.value && String(course.value.instructorId) === String(auth.user?.id)
+)
 const firstLine = computed(() => (course.value?.description || '').split('\n')[0] || '일시·장소 미등록')
 
 const a = ref(null)
@@ -232,7 +245,7 @@ const simming = ref(false)
 
 onMounted(async () => {
   await store.fetchCourse(route.params.id)
-  if (!course.value) { loading.value = false; return }
+  if (!course.value || !isMine.value) { loading.value = false; return }
 
   a.value = await forecastApi.analyze(course.value)
 
