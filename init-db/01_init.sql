@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS enrollments (
     created_at  DATETIME(6),
     updated_at  DATETIME(6),
     PRIMARY KEY (id),
-    UNIQUE KEY uq_user_course (user_id, course_id),
+    -- (user_id, course_id) UNIQUE 제약 없음: 취소 후 재예매를 허용해야 해서
+    -- 중복예매 방지는 애플리케이션 레벨에서 status 확인으로 처리함
     FOREIGN KEY (user_id)   REFERENCES users(id),
     FOREIGN KEY (course_id) REFERENCES courses(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

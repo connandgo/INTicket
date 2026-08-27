@@ -8,9 +8,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
+// user_id+course_id UNIQUE 제약을 DB에 걸어뒀었는데, 취소(CANCELLED) 후 같은 공연을
+// 재예매하려 할 때도 막혀버리는 문제가 있어서 제거함. 중복예매 방지는 애플리케이션
+// 레벨에서 status(PENDING/ACTIVE)만 체크하는 방식으로 대체함 (EnrollmentService 참고)
 @Entity
-@Table(name = "enrollments",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "course_id"}))
+@Table(name = "enrollments")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
