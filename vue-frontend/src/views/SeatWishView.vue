@@ -7,7 +7,7 @@
 
       <header class="head">
         <div>
-          <p class="eyebrow">AI 좌석 매칭</p>
+          <p class="eyebrow">취소표 매칭</p>
           <h1 class="h-t">원하는 자리를 말로 알려주세요</h1>
           <p class="h-d num">
             {{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ round.time }}
@@ -39,15 +39,10 @@
         <section class="card card-pad map-sec">
           <h2 class="s-t">
             좌석 배치
-            <span v-if="wish" class="s-sub">조건에 맞는 구역이 표시됩니다</span>
+            <span class="s-sub">현재 남은 자리 현황입니다</span>
           </h2>
-          <SeatMap
-            :round="round"
-            :grade="picked?.grade || ''"
-            :quantity="picked ? (wish?.quantity || 1) : 0"
-            :max="4"
-            @pick="onMapPick"
-          />
+          <!-- 신청 화면에서는 좌석을 고르지 않는다. 남은 자리 현황만 보여준다. -->
+          <SeatMap :round="round" grade="" :quantity="0" :max="4" />
         </section>
 
         <!-- 오른쪽: 입력 + 결과 -->
@@ -81,76 +76,18 @@
                 <b>대기 {{ registered.seq }}번</b>으로 신청됐습니다.
                 취소표가 나오면 조건에 맞는 순서로 좌석을 배정받습니다.
               </p>
-              <button class="btn btn-red btn-wide" :disabled="releasing" @click="triggerRelease">
-                {{ releasing ? '확인 중' : '취소표 발생' }}
-              </button>
+              <p v-if="matchedNote" class="alert alert-info">{{ matchedNote }}</p>
+              <div class="two">
+                <button class="btn btn-line" :disabled="releasing" @click="runMatching">
+                  {{ releasing ? '처리 중' : '취소표 매칭' }}
+                </button>
+                <button class="btn btn-red" :disabled="checking" @click="showResult">
+                  {{ checking ? '조회 중' : '결과보기' }}
+                </button>
+              </div>
             </template>
           </article>
 
-          <!-- 파싱 결과: 필수 / 선호 / 양보가능 -->
-          <article v-if="wish" class="card card-pad up">
-            <h2 class="s-t">
-              AI가 이해한 조건
-              <span class="s-sub">{{ wish.source === 'AI_SERVICE' ? 'AI 분석 결과' : '등록 전 미리보기' }}</span>
-            </h2>
-            <p class="b-d">틀린 게 있으면 아래에서 직접 빼고 다시 찾아볼 수 있습니다.</p>
-
-            <div v-for="b in BUCKETS" :key="b.key" class="bucket">
-              <p class="b-t" :class="b.key">{{ b.label }}</p>
-              <ul v-if="wish.buckets[b.key].length" class="b-l">
-                <li v-for="(it, i) in wish.buckets[b.key]" :key="it.key + i">
-                  <span class="b-k">{{ it.label }}</span>
-                  <span class="b-v">{{ it.value }}</span>
-                  <button class="b-x" :aria-label="`${it.label} 조건 빼기`" @click="dropCondition(b.key, i)">✕</button>
-                </li>
-              </ul>
-              <p v-else class="b-none">없음</p>
-            </div>
-
-            <p v-if="wish.unparsed.length" class="alert alert-info b-un">
-              이 문장은 조건으로 읽지 못했습니다 — “{{ wish.unparsed[0] }}”.
-              매수·등급·가격·연석 여부를 넣어 다시 써 주시면 더 잘 찾습니다.
-            </p>
-          </article>
-
-          <!-- 매칭 결과 -->
-          <article v-if="matches.length" class="card card-pad up">
-            <h2 class="s-t">추천 좌석</h2>
-
-            <ul class="m-l">
-              <li v-for="(m, i) in matches" :key="m.grade">
-                <button
-                  class="m-c"
-                  :class="{ on: picked?.grade === m.grade, out: !m.available }"
-                  @click="picked = m"
-                >
-                  <span class="m-rank num">{{ i + 1 }}</span>
-                  <span class="m-main">
-                    <span class="m-g">{{ m.grade }}석</span>
-                    <span class="m-p num">{{ m.price.toLocaleString() }}원</span>
-                    <span class="m-left num" :class="{ zero: !m.available }">
-                      {{ m.left === 0 ? '매진' : `잔여 ${m.left}석` }}
-                    </span>
-                  </span>
-                  <span class="m-score num">{{ m.score }}</span>
-                </button>
-
-                <ul v-if="picked?.grade === m.grade" class="m-why">
-                  <li v-for="(r, ri) in m.reasons" :key="ri">{{ r }}</li>
-                </ul>
-              </li>
-            </ul>
-
-            <div class="acts">
-              <router-link
-                v-if="picked?.available"
-                :to="`/courses/${course.id}/booking?round=${round.id}`"
-                class="btn btn-red btn-wide"
-              >{{ picked.grade }}석으로 예매하러 가기</router-link>
-
-
-            </div>
-          </article>
         </section>
       </div>
     </main>
@@ -162,7 +99,7 @@
           <p class="pop-h">취소표가 매칭되었습니다!</p>
           <p class="pop-seat">좌석: <b>{{ seatsLabel(modal.offer.seats) }}</b></p>
           <p class="pop-sub">10분 내 결제 시 예매가 확정됩니다.</p>
-          <button class="btn btn-red btn-wide" @click="goPay">결제하러가기</button>
+          <button class="btn btn-red btn-wide" @click="goPay">예매하기</button>
         </template>
         <template v-else>
           <p class="pop-h none">매칭된 취소표가 없습니다.</p>
@@ -204,24 +141,38 @@ const loading = ref(true)
 
 const text = ref('')
 const wish = ref(null)
-const matches = ref([])
-const picked = ref(null)
 const parsing = ref(false)
 
 const waiting = ref(false)
 const waitErr = ref('')
 const registered = ref(null)   // 등록 결과 { waitlistId, seq, parsed, buckets }
 const releasing = ref(false)
+const checking = ref(false)
+const matchedNote = ref('')
 const modal = ref(null)        // { offer } | { offer: null }
 
-// 취소표를 발생시키고 내게 매칭된 좌석이 있는지 확인한다(시연용).
+// 취소표 매칭을 실행한다. 결과는 바로 띄우지 않고 '결과보기'에서 확인한다.
 // 실제 서비스에서는 취소가 일어날 때 서버가 알아서 돌린다.
-async function triggerRelease() {
+async function runMatching() {
   releasing.value = true
+  matchedNote.value = ''
   modal.value = null
   try {
     await matchingDemoApi.release(route.params.id, pickSeats())
-    // 매칭이 끝날 시간을 준다
+    matchedNote.value = '매칭을 실행했습니다. 결과보기를 눌러 확인하세요.'
+  } catch (e) {
+    console.error('[매칭] 실행 실패:', e)
+    matchedNote.value = '매칭을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    releasing.value = false
+  }
+}
+
+// 내게 배정된 좌석이 있는지 확인해 팝업으로 보여준다.
+async function showResult() {
+  checking.value = true
+  try {
+    // 서버가 매칭을 끝낼 시간을 준다
     await new Promise((r) => setTimeout(r, 3000))
     const offers = await seatWishApi.myOffers()
     const mine = offers.find(
@@ -229,10 +180,10 @@ async function triggerRelease() {
     )
     modal.value = { offer: mine || null }
   } catch (e) {
-    console.error('[seat-wish] 취소표 매칭 실패:', e)
+    console.error('[매칭] 결과 조회 실패:', e)
     modal.value = { offer: null }
   } finally {
-    releasing.value = false
+    checking.value = false
   }
 }
 
@@ -294,51 +245,13 @@ onMounted(async () => {
       const found = mine.find((w) => String(w.courseId) === String(route.params.id))
       if (found) {
         registered.value = found
-        wish.value = { ...found.wish, buckets: found.buckets, source: 'AI_SERVICE', unparsed: [] }
+        wish.value = found.wish
         text.value = found.rawText || ''
-        recompute()
-      }
+          }
     } catch { /* 비로그인 등 — 조용히 넘어간다 */ }
   }
   loading.value = false
 })
-
-// 1단계: 문장을 해석해 보여준다(등록 전 확인용).
-// 서버에 미리보기 API 가 없어 로컬 파서를 쓴다. 실제 등록 시에는
-// 서버의 LLM 파싱 결과로 교체된다.
-async function run() {
-  parsing.value = true
-  picked.value = null
-  registered.value = null
-  try {
-    wish.value = await seatWishApi.preview(text.value)
-    recompute()
-  } finally {
-    parsing.value = false
-  }
-}
-
-function recompute() {
-  matches.value = seatWishApi.match(round.value, wish.value)
-  picked.value = matches.value[0] || null
-}
-
-// 잘못 읽은 조건을 사용자가 빼면 바로 다시 계산한다
-function dropCondition(bucket, index) {
-  const removed = wish.value.buckets[bucket][index]
-  wish.value.buckets[bucket].splice(index, 1)
-  if (removed.key === 'maxPrice') wish.value.maxPrice = null
-  if (removed.key === 'grades') wish.value.grades = ['VIP', 'R', 'S', 'A']
-  if (removed.key === 'together') wish.value.together = null
-  if (removed.key === 'front') wish.value.frontPreferred = null
-  if (removed.key === 'quantity') wish.value.quantity = null
-  recompute()
-}
-
-function onMapPick({ grade }) {
-  const found = matches.value.find((m) => m.grade === grade)
-  if (found) picked.value = found
-}
 
 async function joinWaitlist() {
   waiting.value = true
@@ -354,8 +267,8 @@ async function joinWaitlist() {
     // 서버가 이해한 조건으로 화면을 갱신한다. 로컬 파서 결과보다 이쪽이 정본이다.
     // res.wish 에 매칭용 값(quantity·grades·maxPrice)이 들어 있다. 이걸 펼치지 않으면
     // 추천 좌석이 조건을 못 읽고 엉뚱한 등급을 1순위로 올린다.
-    wish.value = { ...res.wish, buckets: res.buckets, source: res.source, unparsed: [] }
-    recompute()
+    // 풀린 좌석 등급을 고르는 데만 쓴다. 화면에는 분석 결과를 노출하지 않는다.
+    wish.value = res.wish
   } catch (e) {
     console.error('[seat-wish] 대기 등록 실패:', e)
     waitErr.value =
@@ -451,6 +364,8 @@ async function joinWaitlist() {
 }
 
 .acts { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .ov {
   position: fixed; inset: 0; z-index: 80;
