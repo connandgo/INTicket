@@ -44,13 +44,7 @@
     <section class="wrap rank">
       <h2 class="stitle">인기 공연</h2>
 
-      <div v-if="store.needsLogin" class="blank">
-        <h3>로그인하면 인기 공연을 볼 수 있습니다</h3>
-        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
-        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
-      </div>
-
-      <div v-else-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
+      <div v-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
 
       <div v-else-if="store.error" class="blank">
         <h3>공연을 불러오지 못했습니다</h3>
