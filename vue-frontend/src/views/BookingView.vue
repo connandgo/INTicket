@@ -13,10 +13,8 @@
 
       <template v-else>
         <!-- 단계 -->
-        <ol class="steps">
-          <li :class="{ on: step === 1, done: step > 1 }">
-            <span class="num">1</span>{{ fromOffer ? '좌석 배정' : '좌석 등급' }}
-          </li>
+        <ol class="steps" v-if="!fromOffer">
+          <li :class="{ on: step === 1, done: step > 1 }"><span class="num">1</span>좌석 등급</li>
           <li :class="{ on: step === 2, done: step > 2 }"><span class="num">2</span>선점 · 결제</li>
           <li :class="{ on: step === 3 }"><span class="num">3</span>완료</li>
         </ol>
@@ -31,8 +29,17 @@
           </div>
         </section>
 
+        <!-- 매칭 좌석인데 선점이 안 된 경우. 등급을 고르게 하지 않고 재시도만 준다 -->
+        <section v-if="fromOffer && step === 1" class="card-sec">
+          <p class="alert alert-err">{{ err || '배정된 좌석을 선점하지 못했습니다.' }}</p>
+          <button class="btn btn-red btn-lg btn-wide" :disabled="holding" @click="doHold">
+            <span v-if="holding" class="spin spin-w"></span>{{ holding ? '선점 중' : '다시 선점하기' }}
+          </button>
+          <router-link :to="`/courses/${route.params.id}`" class="btn btn-line btn-wide">공연으로 돌아가기</router-link>
+        </section>
+
         <!-- 1단계 · 등급/매수 -->
-        <section v-if="step === 1" class="card-sec">
+        <section v-else-if="step === 1" class="card-sec">
           <h2 class="stitle">좌석 배치</h2>
           <SeatMap
             :round="round"
@@ -101,7 +108,7 @@
 
           <h2 class="stitle">결제 내역</h2>
           <dl class="dl">
-            <div><dt>좌석 등급</dt><dd>{{ held.grade }}석</dd></div>
+            <div v-if="!fromOffer"><dt>좌석 등급</dt><dd>{{ held.grade }}석</dd></div>
             <div v-if="held.seats?.length"><dt>선택 좌석</dt><dd>{{ held.seats.map(seatName).join(', ') }}</dd></div>
             <div><dt>매수</dt><dd class="num">{{ held.quantity }}매</dd></div>
             <div><dt>1매 가격</dt><dd class="num">{{ held.unitPrice.toLocaleString() }}원</dd></div>
@@ -210,7 +217,8 @@ onMounted(async () => {
 
 // 취소표 매칭으로 넘어온 경우(?seats=S-Q-5,S-Q-6) 자리가 이미 정해져 있다.
 // 등급·매수를 다시 고르게 하지 않고 곧장 선점해서 결제 단계로 보낸다.
-// 선점에 실패하면 fromOffer 를 되돌려 평소대로 1단계에서 고르게 둔다.
+// 선점에 실패해도 등급 선택으로 되돌리지 않는다. 자리는 이미 정해져 있고,
+// 다시 고르라고 하면 배정받은 좌석을 잃는다. 재시도만 준다.
 async function applyOfferSeats() {
   const raw = String(route.query.seats || '').trim()
   if (!raw || !round.value) return
@@ -218,15 +226,19 @@ async function applyOfferSeats() {
   const seats = raw.split(',').map((x) => x.trim()).filter(Boolean)
   // 좌석 ID 는 "{등급}-{열}-{번호}" 형식이다 (recommend-service app/data/seats.py)
   const g = seats[0]?.split('-')[0]
-  if (!g || !round.value.grades.some((x) => x.grade === g)) return
+  if (!g) return
 
   fromOffer.value = true
   grade.value = g
   qty.value = Math.min(seats.length, 4)
   selectedSeats.value = seats
 
+  // 이 좌석은 누군가 취소해서 풀린 자리다. 매진 공연이면 화면 재고가 0 이라
+  // 그대로는 선점이 막힌다. 취소분을 재고에 돌려놓고 바로 내가 잡는다.
+  await bookingApi.freeCancelled(c.value.id, round.value.id, g, qty.value)
+  round.value = await performanceApi.round(c.value, route.query.round)
+
   await doHold()
-  if (step.value !== 2) fromOffer.value = false
 }
 
 onBeforeUnmount(() => {
@@ -292,8 +304,7 @@ function expire() {
   releaseHeld()
   held.value = null
   step.value = 1
-  fromOffer.value = false
-  err.value = '결제 시간이 지나 선점이 풀렸습니다. 다시 선택해 주세요.'
+  err.value = '결제 시간이 지나 선점이 풀렸습니다.'
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
 
@@ -308,7 +319,6 @@ function backToPick() {
   releaseHeld()
   held.value = null
   step.value = 1
-  fromOffer.value = false
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
 

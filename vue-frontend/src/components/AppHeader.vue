@@ -37,7 +37,7 @@
           <!-- 기획사는 예매를 하지 않으므로 예매확인 대신 등록·분석 메뉴를 준다 -->
           <template v-if="isPlanner">
             <router-link to="/courses/new" class="nv" :class="{ on: $route.path === '/courses/new' }">공연등록</router-link>
-            <router-link to="/mypage" class="nv" :class="{ on: isInsight }">AI 수요분석</router-link>
+            <router-link to="/mypage" class="nv" :class="{ on: isInsight }">수요 분석</router-link>
           </template>
           <router-link v-else-if="auth.isAuthenticated" to="/enrollments" class="nv" :class="{ on: $route.path === '/enrollments' }">예매확인</router-link>
         </nav>

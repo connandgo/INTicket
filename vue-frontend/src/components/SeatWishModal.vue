@@ -13,7 +13,7 @@
       </header>
 
       <template v-if="stage === 'input'">
-        <p class="intro">문장으로 희망 조건을 입력하면 AI가 등급·가격·매수를 분석해 대기 목록에 등록합니다.</p>
+        <p class="intro">문장으로 희망 조건을 입력하면 등급·가격·매수를 읽어 대기 목록에 등록합니다.</p>
         <textarea
           v-model="text"
           class="txt wish"

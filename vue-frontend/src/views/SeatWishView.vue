@@ -15,8 +15,7 @@
             <b :class="soldOut ? 'so' : 'ok'">{{ soldOut ? '매진' : `잔여 ${totalLeft}석` }}</b>
           </p>
         </div>
-        <span class="bdg bdg-ai-solid">AI</span>
-      </header>
+              </header>
 
       <!-- 상황 안내: 매진이냐 / 뒷열만 남았냐 -->
       <p class="alert situation" :class="soldOut ? 'alert-err' : 'alert-info'">

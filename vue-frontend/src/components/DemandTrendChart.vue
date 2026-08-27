@@ -2,7 +2,7 @@
   <figure class="chart">
     <figcaption class="legend">
       <span class="lg"><i class="ln solid"></i>실제 집계 (대기 데이터)</span>
-      <span class="lg"><i class="ln dash"></i>AI 예측</span>
+      <span class="lg"><i class="ln dash"></i>예측</span>
     </figcaption>
 
     <svg :viewBox="`0 0 ${W} ${H}`" class="svg" role="img"

@@ -70,6 +70,16 @@ export const bookingApi = {
     return mock.release(courseId, roundId, grade, quantity)
   },
 
+  // 취소표가 발생해 좌석이 풀린 것을 재고에 반영한다.
+  //
+  // 매칭으로 좌석을 배정받아도 화면 재고는 여전히 매진이라 선점이 막힌다.
+  // 취소가 났다는 사실을 서버만 알고 화면 재고는 모르기 때문이다.
+  // 실제 예매 서비스가 붙으면 취소는 서버가 이미 반영하므로 할 일이 없다.
+  async freeCancelled(courseId, roundId, grade, quantity) {
+    if (FEATURES.holdApi) return
+    return mock.release(courseId, roundId, grade, quantity)
+  },
+
   mine() {
     return api.get('/api/enrollments/my').then(unwrap)
   },
