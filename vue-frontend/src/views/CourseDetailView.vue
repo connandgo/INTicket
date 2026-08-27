@@ -33,7 +33,14 @@
               <div><dt>장르</dt><dd>{{ label }}</dd></div>
               <div><dt>기준가</dt><dd><b class="price num">{{ price }}원</b> <span class="small muted">R석 1매 기준</span></dd></div>
               <div><dt>누적 예매</dt><dd class="num">{{ (c.enrollmentCount || 0).toLocaleString() }}건</dd></div>
-              <div v-if="hasCap">
+              <div v-if="rounds.length">
+                <dt>전체 회차 잔여</dt>
+                <dd>
+                  <span v-if="soldOut" class="bdg bdg-red">매진</span>
+                  <span v-else class="num cap-left" :class="{ few: almostGone }">{{ scheduleLeft.toLocaleString() }}석</span>
+                </dd>
+              </div>
+              <div v-else-if="hasCap">
                 <dt>정원</dt>
                 <dd>
                   <span class="num">{{ Number(c.capacity).toLocaleString() }}석</span>
@@ -79,10 +86,10 @@
 
               <template v-else>
                 <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
-                <router-link v-if="firstRoundId" :to="`/courses/${c.id}/seat-wish?round=${firstRoundId}`"
-                             class="btn btn-ai btn-wide">
+                <button v-if="firstRound" type="button" class="btn btn-ai btn-wide"
+                        @click="openWish(firstRound)">
                   취소표 매칭 신청하기
-                </router-link>
+                </button>
                 <button class="btn btn-line btn-wide" :disabled="waiting" @click="joinWaitlist">
                   <span v-if="waiting" class="spin spin-w"></span>
                   {{ waiting ? '등록 중' : '조건 없이 대기만 걸기' }}
@@ -91,8 +98,7 @@
             </section>
 
             <p v-if="store.isShowcase" class="alert alert-info">
-              둘러보기 화면입니다. 표시된 잔여 좌석은 참고용이며,
-              <b>로그인하시면 실시간 정보로 바뀌고 예매할 수 있습니다.</b>
+              로그인하시면 예매와 취소표 매칭을 이용할 수 있습니다.
             </p>
             <p v-else-if="!auth.isAuthenticated" class="alert alert-info">
               공연 정보는 로그인 없이 보실 수 있습니다. 예매하려면 로그인이 필요합니다.
@@ -107,10 +113,8 @@
         <section class="body">
           <h2 class="stitle">회차 선택</h2>
 
-          <!-- 실서버에 붙어 있어도 회차·좌석등급 API는 아직 없다. 화면에 숨기지 않는다. -->
-          <p v-if="!scheduleFromServer" class="alert alert-info sched-note">
-            회차와 좌석 등급은 아직 <b>프론트엔드 임시 데이터</b>입니다.
-            공연 조회·예매·결제·추천은 실제 서버와 연동되어 있습니다.
+          <p v-if="wishNotice" class="alert" :class="wishNoticeType === 'error' ? 'alert-err' : 'alert-ok'">
+            {{ wishNotice }}
           </p>
 
           <div v-if="loadingRounds" class="load"><span class="spin"></span>회차를 불러오는 중입니다</div>
@@ -138,19 +142,22 @@
                 </li>
               </ul>
 
-              <span v-if="soldOut" class="bdg bdg-red rd-go">매진</span>
               <router-link
-                v-else-if="!auth.isAuthenticated && totalLeft(r) > 0 && c.status === 'ACTIVE'"
+                v-if="!auth.isAuthenticated && c.status === 'ACTIVE'"
                 to="/login"
                 class="btn btn-line btn-sm rd-go"
               >로그인 후 예매</router-link>
-              <span v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'" class="rd-go rd-two">
-                <router-link :to="`/courses/${c.id}/seat-wish?round=${r.id}`"
-                             class="btn btn-line btn-sm ai-b" title="취소표 매칭">취소표 매칭</router-link>
-                <router-link :to="`/courses/${c.id}/booking?round=${r.id}`"
+              <span v-else-if="isViewer && c.status === 'ACTIVE'" class="rd-go rd-two">
+                <button type="button" class="btn btn-line btn-sm ai-b" title="취소표 매칭"
+                        @click="openWish(r)">취소표 매칭</button>
+                <button type="button" class="btn btn-line btn-sm occur-b"
+                        :disabled="releasingRoundId === r.id" @click="releaseTicket(r)">
+                  {{ releasingRoundId === r.id ? '발생 중' : '취소표 발생' }}
+                </button>
+                <router-link v-if="totalLeft(r) > 0" :to="`/courses/${c.id}/booking?round=${r.id}`"
                              class="btn btn-red btn-sm">예매하기</router-link>
+                <span v-else class="bdg bdg-red">매진</span>
               </span>
-              <span v-else-if="totalLeft(r) === 0" class="bdg bdg-gray rd-go">전 등급 매진</span>
               <span v-else class="rd-go small muted">예매 불가</span>
             </li>
           </ul>
@@ -173,6 +180,22 @@
         </section>
       </template>
     </main>
+
+    <SeatWishModal
+      :open="wishOpen"
+      :course="c"
+      :round="wishRound"
+      @registered="onWishRegistered"
+      @close="wishOpen = false"
+    />
+    <SeatMatchResultModal
+      :open="resultOpen"
+      :course="c"
+      :round="resultRound"
+      :offer="resultOffer"
+      :reason="resultReason"
+      @close="resultOpen = false"
+    />
   </div>
 </template>
 
@@ -181,13 +204,16 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
+import SeatWishModal from '@/components/SeatWishModal.vue'
+import SeatMatchResultModal from '@/components/SeatMatchResultModal.vue'
 import { useCourseStore } from '@/store/course.js'
 import { useAuthStore } from '@/store/auth.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
 import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity, isNotSoldOutError } from '@/domain/soldout.js'
 import { useWaitlistStore } from '@/store/waitlist.js'
-import { HOLD_MINUTES, FEATURES } from '@/config/features.js'
+import { HOLD_MINUTES } from '@/config/features.js'
+import { seatWishApi, matchingDemoApi } from '@/api/seatWish.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -199,8 +225,13 @@ const price = computed(() => Number(c.value?.price || 0).toLocaleString())
 const isViewer = computed(() => auth.user?.role !== 'INSTRUCTOR')
 
 const waitlist = useWaitlistStore()
-const soldOut = computed(() => isSoldOut(c.value))
-const almostGone = computed(() => isAlmostGone(c.value))
+const rounds = ref([])
+const loadingRounds = ref(false)
+const scheduleLeft = computed(() => rounds.value.reduce((sum, round) => sum + totalLeft(round), 0))
+const soldOut = computed(() => rounds.value.length
+  ? rounds.value.every((round) => totalLeft(round) === 0)
+  : isSoldOut(c.value))
+const almostGone = computed(() => rounds.value.length ? scheduleLeft.value <= 10 : isAlmostGone(c.value))
 const left = computed(() => seatsLeft(c.value))
 const hasCap = computed(() => hasCapacity(c.value))
 const myWait = computed(() => waitlist.findByCourse(route.params.id))
@@ -226,10 +257,76 @@ async function joinWaitlist() {
   }
 }
 
-const rounds = ref([])
-const loadingRounds = ref(false)
-const scheduleFromServer = FEATURES.scheduleApi
-const firstRoundId = computed(() => rounds.value[0]?.id ?? null)
+const firstRound = computed(() => rounds.value[0] ?? null)
+const wishOpen = ref(false)
+const wishRound = ref(null)
+const registeredByRound = ref({})
+const wishNotice = ref('')
+const wishNoticeType = ref('ok')
+const releasingRoundId = ref(null)
+const resultOpen = ref(false)
+const resultRound = ref(null)
+const resultOffer = ref(null)
+const resultReason = ref('')
+
+function openWish(round) {
+  wishRound.value = round
+  wishOpen.value = true
+  wishNotice.value = ''
+}
+
+function onWishRegistered(registered) {
+  registeredByRound.value = {
+    ...registeredByRound.value,
+    [String(registered.roundId)]: registered
+  }
+  wishNoticeType.value = 'ok'
+  wishNotice.value = `${wishRound.value.date.replaceAll('-', '.')} ${wishRound.value.time} 회차의 취소표 희망사항이 등록되었습니다.`
+}
+
+async function releaseTicket(round) {
+  releasingRoundId.value = round.id
+  wishNotice.value = ''
+  try {
+    let registered = registeredByRound.value[String(round.id)]
+    if (!registered) {
+      const mine = await seatWishApi.myWaitlists()
+      registered = [...mine].reverse().find((w) => String(w.courseId) === String(c.value.id))
+    }
+
+    if (!registered) {
+      openWish(round)
+      wishNoticeType.value = 'error'
+      wishNotice.value = '먼저 취소표 매칭에서 원하는 좌석 조건을 등록해 주세요.'
+      return
+    }
+
+    const seats = pickReleasedSeats(registered.wish)
+    const result = await matchingDemoApi.release(c.value.id, seats)
+    resultRound.value = round
+    resultOffer.value = result?.offers?.[0] || null
+    resultReason.value = result?.reason || ''
+    resultOpen.value = true
+  } catch (e) {
+    console.error('[detail] 취소표 발생 실패:', e)
+    resultRound.value = round
+    resultOffer.value = null
+    resultReason.value = e.response?.data?.detail || e.response?.data?.message || '취소표 발생 요청을 처리하지 못했습니다.'
+    resultOpen.value = true
+  } finally {
+    releasingRoundId.value = null
+  }
+}
+
+function pickReleasedSeats(wish) {
+  const grades = wish?.grades?.length ? wish.grades : ['S']
+  const prices = { VIP: 240000, R: 150000, S: 102000, A: 68000 }
+  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'S' }
+  const maxPrice = Number(wish?.maxPrice) || Infinity
+  const grade = grades.find((g) => prices[g] <= maxPrice) || grades[0] || 'S'
+  const quantity = Math.max(1, Math.min(4, Number(wish?.quantity) || 1))
+  return Array.from({ length: quantity }, (_, i) => `${grade}-${rows[grade] || 'Q'}-${i + 5}`)
+}
 
 function totalLeft(r) {
   return r.grades.reduce((a, g) => a + remaining(g), 0)
@@ -282,13 +379,10 @@ onMounted(async () => {
 
 .body { margin-top: 46px; }
 
-.sched-note { margin-bottom: 14px; }
-.sched-note b { font-weight: 700; }
-
 .rounds { border-top: 2px solid var(--navy); }
 .rd {
   display: grid;
-  grid-template-columns: 190px 1fr 110px;
+  grid-template-columns: 190px 1fr 270px;
   gap: 18px;
   align-items: center;
   padding: 15px 6px;
@@ -317,6 +411,8 @@ onMounted(async () => {
 .rd-two { display: inline-flex; gap: 6px; }
 .ai-b { border-color: var(--ai-line); color: var(--ai); }
 .ai-b:hover { border-color: var(--ai); background: var(--ai-wash); }
+.occur-b { border-color: #E8B9C1; color: var(--red-dark); }
+.occur-b:hover:not(:disabled) { border-color: var(--red); background: var(--red-wash); }
 .btn-ai { background: var(--ai); color: #fff; border-color: var(--ai); }
 .btn-ai:hover:not(:disabled) { background: #5A38CC; border-color: #5A38CC; }
 

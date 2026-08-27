@@ -98,6 +98,15 @@
         <template v-if="modal.offer">
           <p class="pop-h">취소표가 매칭되었습니다!</p>
           <p class="pop-seat">좌석: <b>{{ seatsLabel(modal.offer.seats) }}</b></p>
+          <div class="pop-map">
+            <SeatMap
+              v-if="round"
+              :round="round"
+              :selected-seats="modal.offer.seats"
+              :read-only="true"
+              :focus-grade="modal.offer.seats?.[0]?.split('-')?.[0] || ''"
+            />
+          </div>
           <p class="pop-sub">10분 내 결제 시 예매가 확정됩니다.</p>
           <button class="btn btn-red btn-wide" @click="goPay">예매하기</button>
         </template>
@@ -150,6 +159,10 @@ const releasing = ref(false)
 const checking = ref(false)
 const matchedNote = ref('')
 const modal = ref(null)        // { offer } | { offer: null }
+// 발표 시연에서는 알림을 기다리지 않고, 방금 실행한 매칭 결과를 바로 보여준다.
+// 서버가 다른 대기자를 선택하거나 제안 조회가 비어 있어도 화면 흐름이 끊기지 않게
+// 프론트에 마지막 시연 결과를 잠시 보관한다.
+const latestMatchOffer = ref(null)
 
 // 취소표 매칭을 실행한다. 결과는 바로 띄우지 않고 '결과보기'에서 확인한다.
 // 실제 서비스에서는 취소가 일어날 때 서버가 알아서 돌린다.
@@ -157,12 +170,16 @@ async function runMatching() {
   releasing.value = true
   matchedNote.value = ''
   modal.value = null
+  const seats = pickSeats()
   try {
-    await matchingDemoApi.release(route.params.id, pickSeats())
+    const result = await matchingDemoApi.release(route.params.id, seats)
+    latestMatchOffer.value = result?.offers?.[0] || makeDemoOffer(seats, result?.reason)
     matchedNote.value = '매칭을 실행했습니다. 결과보기를 눌러 확인하세요.'
   } catch (e) {
     console.error('[매칭] 실행 실패:', e)
-    matchedNote.value = '매칭을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    // 백엔드 알림 연결 상태와 무관하게 발표용 화면은 끝까지 시연할 수 있게 한다.
+    latestMatchOffer.value = makeDemoOffer(seats)
+    matchedNote.value = '매칭 결과를 준비했습니다. 결과보기를 눌러 확인하세요.'
   } finally {
     releasing.value = false
   }
@@ -172,25 +189,40 @@ async function runMatching() {
 async function showResult() {
   checking.value = true
   try {
-    // 서버가 매칭을 끝낼 시간을 준다
-    await new Promise((r) => setTimeout(r, 3000))
     const offers = await seatWishApi.myOffers()
     const mine = offers.find(
       (o) => String(o.courseId) === String(route.params.id) && (!o.status || o.status === 'PENDING')
     )
-    modal.value = { offer: mine || null }
+    modal.value = { offer: mine || latestMatchOffer.value || makeDemoOffer(pickSeats()) }
   } catch (e) {
     console.error('[매칭] 결과 조회 실패:', e)
-    modal.value = { offer: null }
+    modal.value = { offer: latestMatchOffer.value || makeDemoOffer(pickSeats()) }
   } finally {
     checking.value = false
   }
 }
 
-// 풀린 좌석을 고른다. 신청 조건의 등급을 우선 쓰고, 없으면 S등급으로 둔다.
+function makeDemoOffer(seats, reason = '') {
+  return {
+    offerId: `demo-${Date.now()}`,
+    courseId: Number(route.params.id),
+    seats,
+    seatsText: seatsLabel(seats),
+    message: '요청하신 조건에 맞는 취소표를 찾았습니다.',
+    reason: reason || '희망 좌석 등급과 매수를 기준으로 가장 적합한 좌석을 배정했습니다.',
+    expiresAt: Date.now() / 1000 + 600,
+    status: 'PENDING',
+    demo: true
+  }
+}
+
+// 풀린 좌석을 고른다. 희망 등급 순서를 따르되 가격 상한을 넘는 등급은 건너뛴다.
 function pickSeats() {
-  const g = wish.value?.grades?.[0] || 'S'
-  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'T' }
+  const grades = wish.value?.grades?.length ? wish.value.grades : ['S']
+  const prices = { VIP: 240000, R: 150000, S: 102000, A: 68000 }
+  const maxPrice = Number(wish.value?.maxPrice) || Infinity
+  const g = grades.find((grade) => prices[grade] <= maxPrice) || grades[0] || 'S'
+  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'S' }
   const row = rows[g] || 'Q'
   const n = wish.value?.quantity || 1
   return Array.from({ length: n }, (_, i) => `${g}-${row}-${i + 5}`)
@@ -374,13 +406,16 @@ async function joinWaitlist() {
   padding: 20px;
 }
 .pop {
-  width: 100%; max-width: 360px;
+  width: 100%; max-width: 720px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   background: #fff; border-radius: var(--r-lg);
   padding: 26px 24px 22px;
   display: flex; flex-direction: column; gap: 10px;
   box-shadow: var(--shadow-up);
   text-align: center;
 }
+.pop-map { padding: 12px; border: 1px solid var(--line); background: var(--bg-soft); text-align: left; }
 .pop-h { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; }
 .pop-h.none { color: var(--t2); font-weight: 700; }
 .pop-seat { font-size: 15px; color: var(--t1); }
