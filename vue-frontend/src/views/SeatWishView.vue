@@ -29,7 +29,7 @@
           더 좋은 자리를 원하시면 취소표 대기도 함께 걸 수 있습니다.
         </template>
         <template v-else>
-          조건을 적어주시면 지금 예매 가능한 자리 중 가장 가까운 곳을 찾아 드립니다.
+          적어주신 조건에 가장 가까운 자리를 찾습니다.
         </template>
       </p>
 
@@ -65,7 +65,7 @@
               <span v-if="waiting" class="spin spin-w"></span>{{ waiting ? '신청 중' : '신청하기' }}
             </button>
             <p v-if="!registered" class="fhint">
-              지금 표가 없어도 괜찮습니다. 신청해두시면 취소표가 나왔을 때 조건에 맞는 분부터 알려드립니다.
+              취소표가 나오면 조건에 맞는 순서대로 좌석이 배정됩니다.
             </p>
             <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
 
@@ -79,10 +79,7 @@
               <button class="btn btn-red btn-wide" :disabled="releasing" @click="runMatching">
                 <span v-if="releasing" class="spin spin-w"></span>{{ releasing ? '매칭 중' : '취소표 발생' }}
               </button>
-              <p class="fhint">
-                마감 직전 미결제분이 한꺼번에 취소되는 상황입니다.
-                조건에 맞으면 좌석이 배정되고 바로 결제로 넘어갑니다.
-              </p>
+              <p class="fhint">조건에 맞는 좌석이 있으면 배정 후 바로 결제로 넘어갑니다.</p>
             </template>
           </article>
 

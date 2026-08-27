@@ -113,7 +113,7 @@
             <div><dt>매수</dt><dd class="num">{{ held.quantity }}매</dd></div>
             <div><dt>1매 가격</dt><dd class="num">{{ held.unitPrice.toLocaleString() }}원</dd></div>
             <div><dt>결제 금액</dt><dd><b class="amt num">{{ held.amount.toLocaleString() }}원</b></dd></div>
-            <div><dt>결제 수단</dt><dd>모의 결제 <span class="small muted">실제 청구되지 않습니다</span></dd></div>
+            <div><dt>결제 수단</dt><dd>신용·체크카드</dd></div>
           </dl>
 
           <p v-if="err" class="alert alert-err">{{ err }}</p>
@@ -129,7 +129,7 @@
           <div class="ok-mark">✓</div>
           <h2 class="done-h">예매가 접수되었습니다</h2>
           <p class="done-p">
-            결제가 완료되면 예매 확정으로 바뀝니다. 상태는 내 예매에서 확인할 수 있습니다.
+            결제가 완료되면 예매가 확정됩니다.
           </p>
           <dl class="dl">
             <div><dt>공연</dt><dd>{{ c.title }}</dd></div>

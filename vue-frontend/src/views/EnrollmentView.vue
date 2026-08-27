@@ -75,7 +75,7 @@
 
         <!-- AI가 보낸 좌석 제안 -->
         <section v-if="offers.length" class="osec">
-          <h2 class="stitle">배정된 좌석</h2>
+          <h2 class="stitle">AI 좌석 제안</h2>
           <p class="onote small">
             취소표가 나와 조건에 맞는 좌석을 찾았습니다. 수락하시면 바로 예매됩니다.
           </p>
@@ -113,13 +113,13 @@
               <span class="bdg" :class="WAIT_STYLE[w.status]">{{ WAIT_LABEL[w.status] }}</span>
               <router-link :to="`/courses/${w.courseId}`" class="wttl">{{ courseTitle(w.courseId) }}</router-link>
               <span class="wat num">{{ fmt(w.createdAt) }} 등록</span>
-              <span v-if="w.status === 'MATCHED'" class="wdone">자동 예매 완료 — 위 목록에서 확인하세요</span>
+              <span v-if="w.status === 'MATCHED'" class="wdone">자동 예매 완료</span>
             </li>
           </ul>
         </section>
 
         <p class="foot-note small muted">
-          취소하면 결제도 함께 취소되고 좌석이 다시 풀립니다. 실제 환불 트랜잭션은 발생하지 않는 모의 결제입니다.
+          취소하면 결제도 함께 취소되고 좌석이 다시 풀립니다.
         </p>
       </template>
     </main>

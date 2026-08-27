@@ -29,7 +29,7 @@
         <table v-else class="tbl">
           <thead>
             <tr>
-              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">수요 분석</th>
+              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">AI 분석</th>
             </tr>
           </thead>
           <tbody>
@@ -104,7 +104,7 @@
         </ul>
 
         <p v-if="enroll.items.length > 3" class="small muted more-note">
-          최근 {{ recentBookings.length }}건만 보여드립니다. 나머지는
+          최근 {{ recentBookings.length }}건입니다. 전체는
           <router-link to="/enrollments" class="lk">내 예매</router-link>에서 확인하세요.
         </p>
       </section>
@@ -123,7 +123,7 @@
 
         <div v-else-if="!rec.items.length" class="blank">
           <h3>추천할 공연이 아직 없습니다</h3>
-          <p>공연을 한 편 예매하시면 취향에 맞는 공연을 골라 드립니다.</p>
+          <p>예매 이력이 쌓이면 취향에 맞는 공연을 추천합니다.</p>
           <router-link to="/courses" class="btn btn-red btn-sm" style="margin-top:14px">공연 보러 가기</router-link>
         </div>
 

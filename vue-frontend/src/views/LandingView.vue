@@ -64,7 +64,7 @@
     <footer class="ft">
       <div class="wrap ft-in">
         <p class="ft-n">INTicket</p>
-        <p class="small muted">공연 예매 MVP · 좌석은 등급으로 예매되며 개별 좌석 지정은 지원하지 않습니다</p>
+        <p class="small muted">좌석은 등급 단위로 예매되며, 같은 등급 안에서는 현장 배정됩니다</p>
       </div>
     </footer>
   </div>

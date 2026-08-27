@@ -7,9 +7,9 @@
       <header class="head">
         <div>
           <h1 class="h-t">
-            수요 분석 결과
+            AI 수요 분석 결과
                       </h1>
-          <p class="h-d">취소표 대기와 판매 데이터를 바탕으로 미충족 수요를 분석했습니다.</p>
+          <p class="h-d">AI가 취소표 대기 및 사용자 행동 데이터를 기반으로 미충족 수요를 분석했습니다.</p>
         </div>
         <router-link to="/mypage" class="close" aria-label="닫기">✕</router-link>
       </header>
@@ -26,7 +26,7 @@
       <template v-else-if="a && isMine">
         <!-- 서버가 응답하면(aiEnabled 가 false 여도 폴백 계산 결과) 이 안내는 뜨지 않는다 -->
         <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
-          예측 서비스가 아직 값을 주지 않아 <b>대기·판매 데이터 기반 임시 추정치</b>로 표시하고 있습니다.
+          <b>대기·판매 데이터</b>를 기준으로 산출한 결과입니다.
         </p>
 
         <!-- 상단 4칸 -->
@@ -64,7 +64,7 @@
           <!-- ① 유효 초과수요 -->
           <article class="card metric m-ai">
             <h2 class="m-t"><span class="m-n">①</span> 유효 초과수요 예측</h2>
-            <p class="m-l">추정 유효 초과수요</p>
+            <p class="m-l">AI 추정 유효 초과수요</p>
             <p class="m-v">
               <b class="num">{{ a.excessDemand.effectiveSeats.toLocaleString() }}</b><em>석</em>
               <span class="bdg bdg-ai-solid m-b">{{ a.excessDemand.level.label }}</span>
@@ -80,7 +80,7 @@
           <!-- ② 추가 회차 전환수요 -->
           <article class="card metric m-blue">
             <h2 class="m-t"><span class="m-n">②</span> 추가 회차 전환수요 예측</h2>
-            <p class="m-l">추천 회차</p>
+            <p class="m-l">추천 회차 (AI)</p>
             <p class="m-v">
               <b>{{ a.extraShow.recommended.weekday }}요일</b>
               <span class="num rec-t">{{ a.extraShow.recommended.time }}</span>
@@ -89,7 +89,7 @@
             <dl class="m-d">
               <div><dt>예상 판매량</dt><dd class="num">{{ a.extraShow.expectedAudience.toLocaleString() }} / {{ a.extraShow.expectedSeats.toLocaleString() }}석</dd></div>
               <div><dt>예상 판매율</dt><dd class="num">{{ Math.round(a.extraShow.expectedRate * 100) }}%</dd></div>
-              <div><dt>종합 판단</dt><dd class="verdict">{{ a.extraShow.verdict.label }}</dd></div>
+              <div><dt>AI 판단</dt><dd class="verdict">{{ a.extraShow.verdict.label }}</dd></div>
             </dl>
             <p class="m-f">＊ 현재 미충족 수요가 해당 회차에 전환될 확률</p>
           </article>
@@ -115,7 +115,7 @@
         <!-- 중단: 차트 + 시뮬레이션 -->
         <section class="mid">
           <article class="card card-pad">
-            <h2 class="s-t">수요 추세 및 예측</h2>
+            <h2 class="s-t">수요 추세 및 AI 예측</h2>
             <DemandTrendChart :actual="a.trend.actual" :forecast="a.trend.forecast" />
             <p class="chart-note">
               최근 7일간 유효 잠재수요가
@@ -126,7 +126,7 @@
 
           <article class="card card-pad sim">
             <h2 class="s-t">추가 회차 시뮬레이션</h2>
-            <p class="s-d">추가 회차 조건을 입력하면 예상 판매량을 계산합니다.</p>
+            <p class="s-d">추가 회차 조건을 입력하면 AI가 예상 판매량을 분석합니다.</p>
 
             <div class="s-form">
               <div class="fld">
@@ -149,7 +149,7 @@
             </div>
 
             <button class="btn btn-ai btn-wide" :disabled="simming" @click="runSim">
-              <span v-if="simming" class="spin spin-w"></span>{{ simming ? '분석 중' : '수요 예측' }}
+              <span v-if="simming" class="spin spin-w"></span>{{ simming ? '분석 중' : 'AI 수요 예측' }}
             </button>
 
             <div v-if="simResult" class="s-out">
@@ -168,7 +168,7 @@
         <!-- 하단: 후보 비교 + 인사이트 -->
         <section class="bot">
           <article class="card card-pad">
-            <h2 class="s-t">추가 회차 후보 비교 <span class="s-sub">(추천 순)</span></h2>
+            <h2 class="s-t">추가 회차 후보 비교 <span class="s-sub">(AI 추천 순)</span></h2>
             <table class="cand">
               <thead>
                 <tr><th>순위</th><th>회차</th><th class="r">예상 관객</th><th>예상 판매율</th><th class="r">종합 판단</th></tr>
@@ -184,7 +184,7 @@
                   </td>
                   <td class="r">
                     <span class="bdg" :class="c.rank === 1 ? 'bdg-ai-solid' : 'bdg-ai'">
-                      {{ c.rank === 1 ? '추천' : c.verdict.label }}
+                      {{ c.rank === 1 ? 'AI 추천' : c.verdict.label }}
                     </span>
                   </td>
                 </tr>
@@ -193,7 +193,7 @@
           </article>
 
           <article class="card card-pad ins">
-            <h2 class="s-t">분석 요약</h2>
+            <h2 class="s-t">AI 인사이트</h2>
             <ul class="ins-l">
               <li v-for="(t, i) in a.insights" :key="i">{{ t }}</li>
             </ul>
