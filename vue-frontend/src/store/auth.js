@@ -5,9 +5,13 @@ import { DEMO } from '@/config/features.js'
 import { read as readDemoDb } from '@/mock/db.js'
 
 const AUTH_SERVER_URL = import.meta.env.VITE_AUTH_SERVER_URL || 'http://localhost:8080'
+// 인증 서버에 등록된 값과 정확히 일치해야 한다(끝의 / 포함).
+const POST_LOGOUT_URI = import.meta.env.VITE_POST_LOGOUT_URI || 'http://localhost:3000/'
 
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref(sessionStorage.getItem('access_token') || null)
+  // OIDC 로그아웃(/connect/logout)에 id_token_hint 로 넣어야 세션이 끊긴다.
+  const idToken = ref(sessionStorage.getItem('id_token') || null)
   const user = ref(JSON.parse(sessionStorage.getItem('user') || 'null'))
 
   const isAuthenticated = computed(() => !!accessToken.value)
@@ -16,6 +20,12 @@ export const useAuthStore = defineStore('auth', () => {
   function setToken(token) {
     accessToken.value = token
     sessionStorage.setItem('access_token', token)
+  }
+
+  function setIdToken(token) {
+    idToken.value = token || null
+    if (token) sessionStorage.setItem('id_token', token)
+    else sessionStorage.removeItem('id_token')
   }
 
   function setUser(userData) {
@@ -45,8 +55,10 @@ export const useAuthStore = defineStore('auth', () => {
   function clearSession() {
     accessToken.value = null
     user.value = null
+    idToken.value = null
     sessionStorage.removeItem('access_token')
     sessionStorage.removeItem('user')
+    sessionStorage.removeItem('id_token')
   }
 
   function logout(redirect = true) {
@@ -56,37 +68,26 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
-  // 이걸 안 하면 우리 앱에서 로그아웃해도 :8080 의 로그인 세션이 남아 있어서,
-  // 다음에 '로그인'을 눌렀을 때 아이디·비밀번호를 묻지 않고 곧바로 통과해 버린다.
-  //
-  // 브라우저를 :8080 으로 보내면 인증 서버 로그인 페이지에 사용자가 남겨지므로,
-  // 같은 출처로 프록시된 /auth-logout 을 조용히 호출하고 화면은 우리 앱에 둔다.
-  // 쿠키는 포트를 구분하지 않아 :8080 이 심은 세션 쿠키가 함께 전달된다.
-  async function fullLogout() {
+  // Spring Security 의 /logout 은 CSRF 때문에 GET 으로는 세션이 안 끊긴다.
+  // 그래서 표준 OIDC RP-Initiated Logout(/connect/logout)을 쓴다.
+  // 이 인증 서버에는 post_logout_redirect_uri 로 http://localhost:3000/ 이
+  // 등록되어 있어서, 세션을 끊은 뒤 우리 앱 홈으로 되돌려 보내 준다.
+  function fullLogout() {
+    const hint = idToken.value
     clearSession()
-    try {
-      await fetch('/auth-logout', { credentials: 'include', redirect: 'manual' })
-    } catch (e) {
-      // 프록시가 없는 환경(빌드 후 정적 배포 등)에서는 직접 부른다.
-      // 이 경우엔 인증 서버 페이지로 이동하게 된다.
-      console.warn('[auth] 조용한 로그아웃 실패, 인증 서버로 이동합니다:', e)
+
+    if (!hint) {
+      // id_token 이 없으면(예전 세션 등) 되돌아올 방법이 없다.
+      // 세션이라도 끊고 인증 서버 로그아웃 화면에 맡긴다.
       window.location.href = `${AUTH_SERVER_URL}/logout`
       return
     }
-  }
 
-  // 데모 모드 로그인 — auth-server 없이 계정만 골라 들어간다.
-  // 비밀번호를 받지 않는다. 실제 인증이 아니라는 뜻이고, DEMO 일 때만 쓰인다.
-  function demoLogin(email) {
-    const user = readDemoDb().users.find((u) => u.email === email)
-    if (!user) throw new Error('데모 계정을 찾을 수 없습니다.')
-    setToken(`demo.${user.id}.${Date.now()}`)
-    setUser(user)
-    return user
-  }
-
-  function demoUsers() {
-    return DEMO ? readDemoDb().users : []
+    const params = new URLSearchParams({
+      id_token_hint: hint,
+      post_logout_redirect_uri: POST_LOGOUT_URI
+    })
+    window.location.href = `${AUTH_SERVER_URL}/connect/logout?${params.toString()}`
   }
 
   // OAuth2 Authorization Code Flow
@@ -116,6 +117,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     setToken(token)
+    // scope=openid 라 id_token 도 함께 온다. 로그아웃할 때 필요하다.
+    setIdToken(res?.data?.id_token)
     await fetchUser()
   }
 
@@ -124,6 +127,8 @@ export const useAuthStore = defineStore('auth', () => {
     demoUsers,
     clearSession,
     fullLogout,
+    idToken,
+    setIdToken,
     accessToken,
     user,
     isAuthenticated,
