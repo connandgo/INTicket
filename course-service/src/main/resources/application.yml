@@ -6,15 +6,15 @@ spring:
     name: course-service
 
   datasource:
-    url: jdbc:mariadb://lecturedb:3306/lecture_db 
+    url: ${SPRING_DATASOURCE_URL:jdbc:mariadb://lecturedb:3306/performance_db}
     # 컨테이너 이름 lecturedb 로 입력 (원래 IP를 입력하지만, 재부팅 시 변경될 수 있는 가능성 제거)
-    username: manager
-    password: SqlDba-1
+    username: ${SPRING_DATASOURCE_USERNAME:manager}
+    password: ${SPRING_DATASOURCE_PASSWORD:SqlDba-1}
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:

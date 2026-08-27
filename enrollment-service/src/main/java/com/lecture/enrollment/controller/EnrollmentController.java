@@ -2,6 +2,8 @@ package com.lecture.enrollment.controller;
 
 import com.lecture.enrollment.dto.EnrollmentDto;
 import com.lecture.enrollment.dto.WaitlistDto;
+import com.lecture.enrollment.dto.BookingDto;
+import com.lecture.enrollment.service.BookingService;
 import com.lecture.enrollment.service.EnrollmentService;
 import com.lecture.enrollment.service.WaitlistService;
 import jakarta.validation.Valid;
@@ -19,6 +21,7 @@ public class EnrollmentController {
 
     private final EnrollmentService enrollmentService;
     private final WaitlistService waitlistService;
+    private final BookingService bookingService;
 
     /**
      * POST /enrollments - 수강신청
@@ -27,12 +30,37 @@ public class EnrollmentController {
     @PostMapping
     public ResponseEntity<EnrollmentDto.ApiResponse<EnrollmentDto.EnrollmentResponse>> enroll(
             @Valid @RequestBody EnrollmentDto.EnrollRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+
+        if (!"STUDENT".equals(role)) {
+            throw new org.springframework.security.access.AccessDeniedException("관람객만 예매할 수 있습니다");
+        }
 
         EnrollmentDto.EnrollmentResponse response =
-                enrollmentService.enroll(userId, request.getCourseId());
+                enrollmentService.enroll(userId, request.getCourseId(), request.getHoldId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(EnrollmentDto.ApiResponse.success(response));
+    }
+
+    @PostMapping("/holds")
+    public ResponseEntity<EnrollmentDto.ApiResponse<BookingDto.HoldResponse>> hold(
+            @Valid @RequestBody BookingDto.HoldRequest request,
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+        if (!"STUDENT".equals(role)) {
+            throw new org.springframework.security.access.AccessDeniedException("관람객만 좌석을 선점할 수 있습니다");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(EnrollmentDto.ApiResponse.success(bookingService.hold(userId, request)));
+    }
+
+    @DeleteMapping("/holds")
+    public ResponseEntity<EnrollmentDto.ApiResponse<Void>> releaseHold(
+            @Valid @RequestBody BookingDto.HoldRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        bookingService.release(userId, request);
+        return ResponseEntity.ok(EnrollmentDto.ApiResponse.<Void>success(null));
     }
 
     /**
@@ -80,7 +108,12 @@ public class EnrollmentController {
     @PostMapping("/waitlist")
     public ResponseEntity<EnrollmentDto.ApiResponse<WaitlistDto.WaitlistResponse>> registerWaitlist(
             @Valid @RequestBody WaitlistDto.WaitlistRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+
+        if (!"STUDENT".equals(role)) {
+            throw new org.springframework.security.access.AccessDeniedException("관람객만 취소표 대기를 등록할 수 있습니다");
+        }
 
         WaitlistDto.WaitlistResponse response = waitlistService.register(userId, request.getCourseId());
         return ResponseEntity.status(HttpStatus.CREATED)

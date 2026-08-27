@@ -3,6 +3,7 @@ package com.lecture.course.dto;
 import com.lecture.course.entity.Course;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
@@ -32,7 +33,7 @@ public class CourseDto {
         private BigDecimal price;
 
         // 정원 - 비워두면 무제한
-        @PositiveOrZero(message = "정원은 0 이상이어야 합니다")
+        @Positive(message = "정원은 1 이상이어야 합니다")
         private Integer capacity;
     }
 

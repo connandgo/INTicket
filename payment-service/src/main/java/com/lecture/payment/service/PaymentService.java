@@ -39,10 +39,20 @@ public class PaymentService {
         log.info("[PaymentService] 결제 요청 - userId: {}, courseId: {}, amount: {}",
                 request.getUserId(), request.getCourseId(), request.getAmount());
 
+        Payment existing = paymentRepository.findByEnrollmentId(request.getEnrollmentId()).orElse(null);
+        if (existing != null) {
+            return PaymentDto.InternalPaymentResult.builder()
+                    .paymentId(existing.getId())
+                    .status(existing.getStatus().name())
+                    .build();
+        }
+
         Payment payment = paymentRepository.save(
                 Payment.builder()
+                        .enrollmentId(request.getEnrollmentId())
                         .userId(request.getUserId())
                         .courseId(request.getCourseId())
+                        .quantity(request.getQuantity() == null ? 1 : request.getQuantity())
                         .amount(request.getAmount())
                         .build()
         );
@@ -57,8 +67,10 @@ public class PaymentService {
             kafkaProducer.publishPaymentCompleted(
                     PaymentKafkaProducer.PaymentCompletedEvent.builder()
                             .paymentId(payment.getId())
+                            .enrollmentId(request.getEnrollmentId())
                             .userId(request.getUserId())
                             .courseId(request.getCourseId())
+                            .quantity(payment.getQuantity())
                             .status("COMPLETED")
                             .build()
             );
@@ -92,10 +104,9 @@ public class PaymentService {
      * - Enrollment Service의 예매 취소 시 호출됨
      */
     @Transactional
-    public void cancelPayment(Long userId, Long courseId) {
-        Payment payment = paymentRepository.findByUserIdAndCourseId(userId, courseId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "결제 정보를 찾을 수 없습니다 - userId: " + userId + ", courseId: " + courseId));
+    public void cancelPayment(Long enrollmentId) {
+        Payment payment = paymentRepository.findByEnrollmentId(enrollmentId)
+                .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다: " + enrollmentId));
 
         if (payment.getStatus() == Payment.Status.CANCELLED) {
             log.info("[PaymentService] 이미 취소된 결제입니다 - paymentId: {}", payment.getId());

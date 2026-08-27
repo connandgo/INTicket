@@ -21,7 +21,7 @@ public class PaymentController {
      */
     @PostMapping("/internal/request")
     public ResponseEntity<PaymentDto.InternalPaymentResult> processInternalPayment(
-            @RequestBody PaymentDto.InternalPaymentRequest request) {
+            @Valid @RequestBody PaymentDto.InternalPaymentRequest request) {
 
         PaymentDto.InternalPaymentResult result = paymentService.processInternalPayment(request);
         return ResponseEntity.ok(result);
@@ -31,8 +31,8 @@ public class PaymentController {
      * POST /payments/internal/cancel - 내부 결제 취소 요청 (Enrollment Service 예매 취소 시 호출)
      */
     @PostMapping("/internal/cancel")
-    public ResponseEntity<Void> cancelPayment(@RequestBody PaymentDto.InternalCancelRequest request) {
-        paymentService.cancelPayment(request.getUserId(), request.getCourseId());
+    public ResponseEntity<Void> cancelPayment(@Valid @RequestBody PaymentDto.InternalCancelRequest request) {
+        paymentService.cancelPayment(request.getEnrollmentId());
         return ResponseEntity.ok().build();
     }
 

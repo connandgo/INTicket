@@ -32,7 +32,7 @@ public class Course {
     @Column(nullable = false)
     private Category category;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
     // 강사 ID (users 테이블 참조 - 직접 JOIN 없이 ID만 보관)
@@ -68,14 +68,18 @@ public class Course {
         ACTIVE, INACTIVE
     }
 
-    public void increaseEnrollmentCount() {
-        this.enrollmentCount++;
+    public void increaseEnrollmentCount(int quantity) {
+        if (quantity < 1) {
+            throw new IllegalArgumentException("예매 수량은 1 이상이어야 합니다");
+        }
+        this.enrollmentCount += quantity;
     }
 
-    public void decreaseEnrollmentCount() {
-        if (this.enrollmentCount > 0) {
-            this.enrollmentCount--;
+    public void decreaseEnrollmentCount(int quantity) {
+        if (quantity < 1) {
+            throw new IllegalArgumentException("취소 수량은 1 이상이어야 합니다");
         }
+        this.enrollmentCount = Math.max(0, this.enrollmentCount - quantity);
     }
 
     // capacity가 null이면 무제한이라 매진 자체가 없음

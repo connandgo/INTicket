@@ -22,13 +22,20 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "enrollment_id", nullable = false, unique = true)
+    private Long enrollmentId;
+
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
     @Column(name = "course_id", nullable = false)
     private Long courseId;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer quantity = 1;
+
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)

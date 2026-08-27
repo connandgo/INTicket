@@ -53,13 +53,13 @@ export const FEATURES = {
   performanceApi: true,
 
   // 회차 / 좌석등급 / 잔여수량 — performance-service 생기면 true
-  scheduleApi: on('VITE_API_SCHEDULE'),
+  scheduleApi: import.meta.env.VITE_API_SCHEDULE !== 'false',
 
   // 선점(HOLD) + 결제 마감 시각 — booking-service 생기면 true
-  holdApi: on('VITE_API_HOLD'),
+  holdApi: import.meta.env.VITE_API_HOLD !== 'false',
 
   // 대기 등록 · 취소표 매칭 (Sprint2)
-  waitlistApi: on('VITE_API_WAITLIST')
+  waitlistApi: import.meta.env.VITE_API_WAITLIST !== 'false'
 }
 
 // 선점 유지 시간(분). 명세서상 미결제 시 다음 순번으로 승계된다.

@@ -1,11 +1,20 @@
 package com.lecture.course.repository;
 
 import com.lecture.course.entity.Course;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Course c where c.id = :id")
+    Optional<Course> findByIdForUpdate(@Param("id") Long id);
 
     // 카테고리별 강의 조회 (추천 서비스 사용)
     List<Course> findByCategoryAndStatus(Course.Category category, Course.Status status);

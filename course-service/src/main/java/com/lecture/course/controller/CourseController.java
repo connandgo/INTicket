@@ -1,6 +1,7 @@
 package com.lecture.course.controller;
 
 import com.lecture.course.dto.CourseDto;
+import com.lecture.course.dto.PerformanceDto;
 import com.lecture.course.entity.Course;
 import com.lecture.course.service.CourseService;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import java.util.List;
 public class CourseController {
 
     private final CourseService courseService;
+    private final com.lecture.course.service.PerformanceScheduleService performanceScheduleService;
 
     /**
      * POST /courses - 강의 등록 (강사만)
@@ -94,7 +96,14 @@ public class CourseController {
      */
     @PostMapping("/internal/{id}/enrollment-count")
     public ResponseEntity<Void> increaseEnrollmentCount(@PathVariable Long id) {
-        courseService.increaseEnrollmentCount(id);
+        courseService.increaseEnrollmentCount(id, 1);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/internal/{id}/enrollment-count/{quantity}")
+    public ResponseEntity<Void> increaseEnrollmentCount(
+            @PathVariable Long id, @PathVariable int quantity) {
+        courseService.increaseEnrollmentCount(id, quantity);
         return ResponseEntity.ok().build();
     }
 
@@ -103,8 +112,63 @@ public class CourseController {
      */
     @DeleteMapping("/internal/{id}/enrollment-count")
     public ResponseEntity<Void> decreaseEnrollmentCount(@PathVariable Long id) {
-        courseService.decreaseEnrollmentCount(id);
+        courseService.decreaseEnrollmentCount(id, 1);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/internal/{id}/enrollment-count/{quantity}")
+    public ResponseEntity<Void> decreaseEnrollmentCount(
+            @PathVariable Long id, @PathVariable int quantity) {
+        courseService.decreaseEnrollmentCount(id, quantity);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}/schedules")
+    public ResponseEntity<CourseDto.ApiResponse<List<PerformanceDto.ScheduleResponse>>> getSchedules(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(CourseDto.ApiResponse.success(performanceScheduleService.getSchedules(id)));
+    }
+
+    @GetMapping("/{id}/schedules/{scheduleId}")
+    public ResponseEntity<CourseDto.ApiResponse<PerformanceDto.ScheduleResponse>> getSchedule(
+            @PathVariable Long id, @PathVariable Long scheduleId) {
+        return ResponseEntity.ok(CourseDto.ApiResponse.success(performanceScheduleService.getSchedule(id, scheduleId)));
+    }
+
+    @PostMapping("/{id}/schedules")
+    public ResponseEntity<CourseDto.ApiResponse<PerformanceDto.ScheduleResponse>> addSchedule(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long instructorId,
+            @RequestHeader(value = "X-User-Role", required = false) String role,
+            @Valid @RequestBody PerformanceDto.CreateScheduleRequest request) {
+        if (!"INSTRUCTOR".equals(role)) {
+            throw new AccessDeniedException("공연기획사만 회차를 추가할 수 있습니다");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(CourseDto.ApiResponse.success(
+                performanceScheduleService.addSchedule(id, instructorId, request)));
+    }
+
+    @GetMapping("/{id}/sales")
+    public ResponseEntity<CourseDto.ApiResponse<List<PerformanceDto.SalesResponse>>> getSales(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(CourseDto.ApiResponse.success(performanceScheduleService.getSales(id)));
+    }
+
+    @PostMapping("/internal/inventory/reserve")
+    public ResponseEntity<PerformanceDto.InventoryResponse> reserveInventory(
+            @Valid @RequestBody PerformanceDto.InventoryRequest request) {
+        return ResponseEntity.ok(performanceScheduleService.reserve(request));
+    }
+
+    @PostMapping("/internal/inventory/release")
+    public ResponseEntity<PerformanceDto.InventoryResponse> releaseInventory(
+            @Valid @RequestBody PerformanceDto.InventoryRequest request) {
+        return ResponseEntity.ok(performanceScheduleService.release(request));
+    }
+
+    @GetMapping("/internal/{id}/availability")
+    public ResponseEntity<PerformanceDto.AvailabilityResponse> availability(@PathVariable Long id) {
+        return ResponseEntity.ok(performanceScheduleService.firstAvailability(id));
     }
 
     /**

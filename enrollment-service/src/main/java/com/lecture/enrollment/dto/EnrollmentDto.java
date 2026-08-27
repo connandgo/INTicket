@@ -17,6 +17,8 @@ public class EnrollmentDto {
     public static class EnrollRequest {
         @NotNull(message = "강의 ID는 필수입니다")
         private Long courseId;
+
+        private Long holdId;
     }
 
     // 강의 요약 정보 (내 수강 목록 표시용)
@@ -49,6 +51,7 @@ public class EnrollmentDto {
 
         // 추가
         private CourseSummary course;
+        private BookingDto.BookingDetail booking;
 
         public static EnrollmentResponse from(Enrollment enrollment) {
             return EnrollmentResponse.builder()
@@ -57,6 +60,7 @@ public class EnrollmentDto {
                     .courseId(enrollment.getCourseId())
                     .status(enrollment.getStatus())
                     .createdAt(enrollment.getCreatedAt())
+                    .booking(toBookingDetail(enrollment))
                     .build();
         }
 
@@ -68,6 +72,18 @@ public class EnrollmentDto {
                     .status(enrollment.getStatus())
                     .createdAt(enrollment.getCreatedAt())
                     .course(course)
+                    .booking(toBookingDetail(enrollment))
+                    .build();
+        }
+
+        private static BookingDto.BookingDetail toBookingDetail(Enrollment enrollment) {
+            if (enrollment.getScheduleId() == null) return null;
+            return BookingDto.BookingDetail.builder()
+                    .scheduleId(enrollment.getScheduleId())
+                    .grade(enrollment.getGrade())
+                    .quantity(enrollment.getQuantity())
+                    .unitPrice(enrollment.getUnitPrice())
+                    .amount(enrollment.getAmount())
                     .build();
         }
     }

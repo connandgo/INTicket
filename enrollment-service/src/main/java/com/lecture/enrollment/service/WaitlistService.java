@@ -7,12 +7,13 @@ import com.lecture.enrollment.repository.EnrollmentRepository;
 import com.lecture.enrollment.repository.WaitlistRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 /**
@@ -48,8 +49,8 @@ public class WaitlistService {
             throw new IllegalArgumentException("이미 취소표 대기 등록된 공연입니다");
         }
 
-        Map<String, Object> course = courseServiceClient.getCourse(courseId);
-        if (!isFull(course)) {
+        CourseServiceClient.AvailabilityResult availability = courseServiceClient.firstAvailability(courseId);
+        if (availability.isAvailable()) {
             throw new IllegalArgumentException("매진되지 않은 공연입니다. 바로 예매해 주세요");
         }
 
@@ -76,9 +77,13 @@ public class WaitlistService {
      * 취소로 자리가 났을 때, 가장 먼저 등록한 대기자를 찾는다.
      * 실제 예매 생성/매칭 확정 처리는 호출한 쪽(EnrollmentService)이 한다.
      */
-    public Optional<Waitlist> findNextWaiting(Long courseId) {
-        return waitlistRepository.findFirstByCourseIdAndStatusOrderByCreatedAtAsc(
-                courseId, Waitlist.Status.WAITING);
+    @Transactional
+    public Optional<Waitlist> claimNextWaiting(Long courseId) {
+        Optional<Waitlist> waiting = waitlistRepository
+                .findFirstByCourseIdAndStatusAndClaimedAtIsNullOrderByCreatedAtAsc(
+                        courseId, Waitlist.Status.WAITING);
+        waiting.ifPresent(Waitlist::claim);
+        return waiting;
     }
 
     @Transactional
@@ -86,13 +91,17 @@ public class WaitlistService {
         waitlistRepository.findById(waitlistId).ifPresent(Waitlist::match);
     }
 
-    private boolean isFull(Map<String, Object> course) {
-        Object capacityValue = course.get("capacity");
-        if (capacityValue == null) {
-            return false; // 정원 무제한
-        }
-        int capacity = ((Number) capacityValue).intValue();
-        int enrollmentCount = ((Number) course.get("enrollmentCount")).intValue();
-        return enrollmentCount >= capacity;
+    @Transactional
+    public void releaseClaim(Long waitlistId) {
+        waitlistRepository.findById(waitlistId).ifPresent(Waitlist::releaseClaim);
     }
+
+    @Scheduled(fixedDelay = 60000)
+    @Transactional
+    public void recoverStaleClaims() {
+        waitlistRepository.findByStatusAndClaimedAtLessThanEqual(
+                        Waitlist.Status.WAITING, LocalDateTime.now().minusMinutes(2))
+                .forEach(Waitlist::releaseClaim);
+    }
+
 }

@@ -2,11 +2,15 @@ package com.lecture.enrollment.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Map;
+import java.math.BigDecimal;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Slf4j
 @Component
@@ -15,6 +19,9 @@ public class CourseServiceClient {
 
     private final WebClient.Builder webClientBuilder;
 
+    @Value("${service.course-service.url}")
+    private String courseServiceUrl;
+
     /**
      * Course Service: 강의 존재 여부 확인 (동기 REST)
      */
@@ -22,7 +29,7 @@ public class CourseServiceClient {
         try {
             Boolean exists = webClientBuilder.build()
                     .get()
-                    .uri("http://course-service/api/courses/internal/exists/{id}", courseId)
+                    .uri(courseServiceUrl + "/api/courses/internal/exists/{id}", courseId)
                     .retrieve()
                     .bodyToMono(Boolean.class)
                     .block();
@@ -44,7 +51,7 @@ public class CourseServiceClient {
         try {
             Map<String, Object> responseBody = webClientBuilder.build()
                     .get()
-                    .uri("http://course-service/api/courses/internal/{id}", courseId)
+                    .uri(courseServiceUrl + "/api/courses/internal/{id}", courseId)
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
                     .block();
@@ -91,11 +98,11 @@ public class CourseServiceClient {
     /**
      * Course Service: 수강생 수 증가 (수강 활성화 시 호출)
      */
-    public void increaseEnrollmentCount(Long courseId) {
+    public void increaseEnrollmentCount(Long courseId, int quantity) {
         try {
             webClientBuilder.build()
                     .post()
-                    .uri("http://course-service/api/courses/internal/{id}/enrollment-count", courseId)
+                    .uri(courseServiceUrl + "/api/courses/internal/{id}/enrollment-count/{quantity}", courseId, quantity)
                     .retrieve()
                     .toBodilessEntity()
                     .block();
@@ -104,17 +111,18 @@ public class CourseServiceClient {
         } catch (Exception e) {
             log.error("[CourseServiceClient] 수강생 수 증가 실패 - courseId: {}, error: {}",
                     courseId, e.getMessage());
+            throw new RuntimeException("Course Service 예매 수량 반영 실패", e);
         }
     }
 
     /**
      * Course Service: 수강생 수 감소 (예매 취소 시 호출)
      */
-    public void decreaseEnrollmentCount(Long courseId) {
+    public void decreaseEnrollmentCount(Long courseId, int quantity) {
         try {
             webClientBuilder.build()
                     .method(org.springframework.http.HttpMethod.DELETE)
-                    .uri("http://course-service/api/courses/internal/{id}/enrollment-count", courseId)
+                    .uri(courseServiceUrl + "/api/courses/internal/{id}/enrollment-count/{quantity}", courseId, quantity)
                     .retrieve()
                     .toBodilessEntity()
                     .block();
@@ -124,5 +132,61 @@ public class CourseServiceClient {
             log.error("[CourseServiceClient] 수강생 수 감소 실패 - courseId: {}, error: {}",
                     courseId, e.getMessage());
         }
+    }
+
+    public InventoryResult reserveInventory(Long courseId, Long scheduleId, String grade, Integer quantity) {
+        return inventoryCall("/api/courses/internal/inventory/reserve",
+                new InventoryRequest(courseId, scheduleId, grade, quantity));
+    }
+
+    public InventoryResult releaseInventory(Long courseId, Long scheduleId, String grade, Integer quantity) {
+        return inventoryCall("/api/courses/internal/inventory/release",
+                new InventoryRequest(courseId, scheduleId, grade, quantity));
+    }
+
+    public AvailabilityResult firstAvailability(Long courseId) {
+        AvailabilityResult result = webClientBuilder.build()
+                .get()
+                .uri(courseServiceUrl + "/api/courses/internal/{id}/availability", courseId)
+                .retrieve()
+                .bodyToMono(AvailabilityResult.class)
+                .block();
+        if (result == null) throw new RuntimeException("Course Service 재고 응답이 비어 있습니다");
+        return result;
+    }
+
+    private InventoryResult inventoryCall(String path, InventoryRequest request) {
+        InventoryResult result = webClientBuilder.build()
+                .post()
+                .uri(courseServiceUrl + path)
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(InventoryResult.class)
+                .block();
+        if (result == null) throw new RuntimeException("Course Service 재고 응답이 비어 있습니다");
+        return result;
+    }
+
+    private record InventoryRequest(Long courseId, Long scheduleId, String grade, Integer quantity) {}
+
+    @Getter
+    @NoArgsConstructor
+    public static class InventoryResult {
+        private Long courseId;
+        private Long scheduleId;
+        private String grade;
+        private Integer quantity;
+        private BigDecimal unitPrice;
+        private BigDecimal amount;
+        private Integer remaining;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    public static class AvailabilityResult {
+        private Long courseId;
+        private boolean available;
+        private Long scheduleId;
+        private String grade;
     }
 }

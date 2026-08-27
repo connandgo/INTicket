@@ -37,6 +37,9 @@ public class Waitlist {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
     public enum Status {
         WAITING,  // 대기 중
         MATCHED   // 자리 나서 자동 예매됨
@@ -44,5 +47,17 @@ public class Waitlist {
 
     public void match() {
         this.status = Status.MATCHED;
+        this.claimedAt = null;
+    }
+
+    public void claim() {
+        if (status != Status.WAITING || claimedAt != null) {
+            throw new IllegalStateException("이미 처리 중이거나 완료된 대기 건입니다");
+        }
+        this.claimedAt = LocalDateTime.now();
+    }
+
+    public void releaseClaim() {
+        if (status == Status.WAITING) this.claimedAt = null;
     }
 }

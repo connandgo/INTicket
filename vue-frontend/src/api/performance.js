@@ -15,28 +15,28 @@ export const performanceApi = {
   // 회차 + 좌석등급별 가격·잔여
   async rounds(course) {
     if (FEATURES.scheduleApi) {
-      return unwrap(await api.get(`/api/performances/${course.id}/schedules`))
+      return unwrap(await api.get(`/api/courses/${course.id}/schedules`))
     }
     return mock.getPerformance(course)?.rounds ?? []
   },
 
   async round(course, roundId) {
     if (FEATURES.scheduleApi) {
-      return unwrap(await api.get(`/api/performances/${course.id}/schedules/${roundId}`))
+      return unwrap(await api.get(`/api/courses/${course.id}/schedules/${roundId}`))
     }
     return mock.getRound(course, roundId)
   },
 
   async addRound(courseId, round) {
     if (FEATURES.scheduleApi) {
-      return unwrap(await api.post(`/api/performances/${courseId}/schedules`, round))
+      return unwrap(await api.post(`/api/courses/${courseId}/schedules`, round))
     }
     return mock.addRound(courseId, round)
   },
 
   async sales(course) {
     if (FEATURES.scheduleApi) {
-      return unwrap(await api.get(`/api/performances/${course.id}/sales`))
+      return unwrap(await api.get(`/api/courses/${course.id}/sales`))
     }
     return mock.salesOf(course)
   }

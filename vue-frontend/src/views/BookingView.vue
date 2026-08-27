@@ -234,7 +234,7 @@ async function doHold() {
 
 function releaseHeld() {
   if (!held.value) return
-  bookingApi.release(c.value.id, round.value.id, held.value.grade, held.value.quantity)
+  bookingApi.release(c.value.id, round.value.id, held.value.grade, held.value.quantity, held.value.holdId)
 }
 
 function expire() {

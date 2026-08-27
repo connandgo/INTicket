@@ -30,6 +30,25 @@ public class Enrollment {
     @Column(name = "course_id", nullable = false)
     private Long courseId;
 
+    @Column(name = "hold_id")
+    private Long holdId;
+
+    @Column(name = "schedule_id")
+    private Long scheduleId;
+
+    @Column(length = 10)
+    private String grade;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer quantity = 1;
+
+    @Column(name = "unit_price", precision = 12, scale = 2)
+    private java.math.BigDecimal unitPrice;
+
+    @Column(precision = 12, scale = 2)
+    private java.math.BigDecimal amount;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

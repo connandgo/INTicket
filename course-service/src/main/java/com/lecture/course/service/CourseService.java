@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 public class CourseService {
 
     private final CourseRepository courseRepository;
+    private final PerformanceScheduleService performanceScheduleService;
 
     /**
      * 강의 등록 (강사만 가능 - SecurityConfig에서 role 검증)
@@ -31,7 +32,9 @@ public class CourseService {
                 .capacity(request.getCapacity())
                 .build();
 
-        return CourseDto.CourseResponse.from(courseRepository.save(course));
+        Course saved = courseRepository.save(course);
+        performanceScheduleService.createDefaultSchedules(saved);
+        return CourseDto.CourseResponse.from(saved);
     }
 
     /**
@@ -71,18 +74,20 @@ public class CourseService {
      * 수강생 수 증가 (Enrollment Service 수강 활성화 시 호출)
      */
     @Transactional
-    public void increaseEnrollmentCount(Long courseId) {
-        Course course = findCourseById(courseId);
-        course.increaseEnrollmentCount();
+    public void increaseEnrollmentCount(Long courseId, int quantity) {
+        Course course = courseRepository.findByIdForUpdate(courseId)
+                .orElseThrow(() -> new IllegalArgumentException("공연을 찾을 수 없습니다: " + courseId));
+        course.increaseEnrollmentCount(quantity);
     }
 
     /**
      * 수강생 수 감소 (Enrollment Service 예매 취소 시 호출)
      */
     @Transactional
-    public void decreaseEnrollmentCount(Long courseId) {
-        Course course = findCourseById(courseId);
-        course.decreaseEnrollmentCount();
+    public void decreaseEnrollmentCount(Long courseId, int quantity) {
+        Course course = courseRepository.findByIdForUpdate(courseId)
+                .orElseThrow(() -> new IllegalArgumentException("공연을 찾을 수 없습니다: " + courseId));
+        course.decreaseEnrollmentCount(quantity);
     }
 
     /**

@@ -2,7 +2,9 @@ package com.lecture.payment.dto;
 
 import com.lecture.payment.entity.Payment;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -31,9 +33,16 @@ public class PaymentDto {
     @AllArgsConstructor
     @Builder
     public static class InternalPaymentRequest {
+        @NotNull
+        private Long enrollmentId;
+        @NotNull
         private Long userId;
+        @NotNull
         private Long courseId;
+        @NotNull @PositiveOrZero
         private BigDecimal amount;
+        @NotNull @Positive @Max(4)
+        private Integer quantity;
     }
 
     // 결제 응답
@@ -43,8 +52,10 @@ public class PaymentDto {
     @Builder
     public static class PaymentResponse {
         private Long paymentId;
+        private Long enrollmentId;
         private Long userId;
         private Long courseId;
+        private Integer quantity;
         private BigDecimal amount;
         private Payment.Status status;
         private String transactionId;
@@ -53,8 +64,10 @@ public class PaymentDto {
         public static PaymentResponse from(Payment payment) {
             return PaymentResponse.builder()
                     .paymentId(payment.getId())
+                    .enrollmentId(payment.getEnrollmentId())
                     .userId(payment.getUserId())
                     .courseId(payment.getCourseId())
+                    .quantity(payment.getQuantity())
                     .amount(payment.getAmount())
                     .status(payment.getStatus())
                     .transactionId(payment.getTransactionId())
@@ -79,8 +92,8 @@ public class PaymentDto {
     @AllArgsConstructor
     @Builder
     public static class InternalCancelRequest {
-        private Long userId;
-        private Long courseId;
+        @NotNull
+        private Long enrollmentId;
     }
 
     // 공통 API 응답 래퍼

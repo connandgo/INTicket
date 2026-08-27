@@ -3,6 +3,7 @@ package com.lecture.enrollment.config;
 import com.lecture.enrollment.dto.EnrollmentDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -25,6 +26,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<EnrollmentDto.ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(EnrollmentDto.ApiResponse.error(e.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<EnrollmentDto.ApiResponse<Void>> handleConflict(DataIntegrityViolationException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(EnrollmentDto.ApiResponse.error("이미 처리 중인 예매 또는 취소표 대기 요청입니다"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

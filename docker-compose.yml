@@ -4,8 +4,8 @@
 # Student runtime version (ARM64)
 # - Uses prebuilt Docker images only
 # - Does not execute Dockerfile/Gradle builds
-# - Load the distributed image archive before starting:
-#     docker load -i msa-lecture-images-arm64.tar
+# - Build secondary images first with:
+#     docker compose -f docker-compose.build.yml build
 # - Start with:
 #     docker compose -f docker-compose.student-arm64.yml up -d --pull never
 
@@ -69,7 +69,7 @@ services:
   # Service Discovery
 
   eureka-server:
-    image: msa-lecture-eureka-server:latest
+    image: inticket/eureka-server:secondary
     platform: linux/arm64
     container_name: lecture-eureka
     ports:
@@ -137,7 +137,7 @@ services:
   # Microservices
 
   user-service:
-    image: msa-lecture-user-service:latest
+    image: inticket/user-service:secondary
     platform: linux/arm64
     container_name: lecture-user
     ports:
@@ -161,14 +161,14 @@ services:
       - lecture-net
 
   course-service:
-    image: msa-lecture-course-service:latest
+    image: inticket/course-service:secondary
     platform: linux/arm64
     container_name: lecture-course
     ports:
       - "8082:8082"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/performance_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
@@ -185,20 +185,22 @@ services:
       - lecture-net
 
   enrollment-service:
-    image: msa-lecture-enrollment-service:latest
+    image: inticket/enrollment-service:secondary
     platform: linux/arm64
     container_name: lecture-enrollment
     ports:
       - "8083:8083"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/booking_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - COURSE_SERVICE_URL=http://course-service:8082
+      - PAYMENT_SERVICE_URL=http://payment-service:8084
     depends_on:
       mariadb:
         condition: service_healthy
@@ -212,14 +214,14 @@ services:
       - lecture-net
 
   payment-service:
-    image: msa-lecture-payment-service:latest
+    image: inticket/payment-service:secondary
     platform: linux/arm64
     container_name: lecture-payment
     ports:
       - "8084:8084"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://lecturedb:3306/payment_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
@@ -239,7 +241,7 @@ services:
       - lecture-net
 
   recommend-service:
-    image: msa-lecture-recommend-service:latest
+    image: inticket/recommend-service:secondary
     platform: linux/arm64
     container_name: lecture-recommend
     ports:
@@ -262,6 +264,18 @@ services:
       enrollment-service:
         condition: service_started
       course-service:
+        condition: service_started
+    networks:
+      - lecture-net
+
+  frontend:
+    image: inticket/frontend:secondary
+    platform: linux/arm64
+    container_name: lecture-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
         condition: service_started
     networks:
       - lecture-net

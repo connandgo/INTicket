@@ -8,11 +8,11 @@ COPY gradle gradle
 COPY build.gradle .
 COPY settings.gradle .
 RUN chmod +x gradlew
-RUN ./gradlew dependencies --no-daemon
 
 # 소스 복사 및 빌드
 COPY src src
-RUN ./gradlew bootJar -x test --no-daemon
+RUN --mount=type=cache,id=inticket-gradle-cache,target=/root/.gradle,sharing=locked \
+    ./gradlew bootJar -x test --no-daemon
 
 # 2단계: 실행 환경 (JRE만 포함 - 이미지 경량화)
 FROM eclipse-temurin:21-jre-alpine

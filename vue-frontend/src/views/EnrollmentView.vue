@@ -173,7 +173,7 @@ function genre(e) {
 }
 // 회차·등급·매수는 백엔드가 아직 모르는 값이라 예매 시점에 브라우저에 붙여 둔 것을 읽는다.
 function detail(e) {
-  return bookingApi.detailOf(e.id)
+  return e.booking || bookingApi.detailOf(e.id)
 }
 
 function fmt(iso) {

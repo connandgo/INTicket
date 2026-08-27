@@ -31,7 +31,7 @@ export const bookingApi = {
   // 좌석등급 선점. 잔여 수량이 즉시 줄고 결제 마감 시각을 받는다.
   async hold(course, roundId, grade, quantity) {
     if (FEATURES.holdApi) {
-      return unwrap(await api.post('/api/bookings/hold', {
+      return unwrap(await api.post('/api/enrollments/holds', {
         performanceId: course.id, scheduleId: roundId, grade, quantity
       }))
     }
@@ -40,7 +40,9 @@ export const bookingApi = {
 
   // 선점분 결제 확정. 실제 예매 건은 기존 enrollment API로 만든다.
   async confirm(course, roundId, held) {
-    const created = unwrap(await api.post('/api/enrollments', { courseId: Number(course.id) }))
+    const created = unwrap(await api.post('/api/enrollments', {
+      courseId: Number(course.id), holdId: held.holdId
+    }))
     // 응답은 PENDING이지만 모의 결제가 곧바로 끝나 DB는 이미 ACTIVE일 수 있다.
     // 확정 여부는 화면에서 목록을 다시 읽어 판단한다(API_SPEC 3절).
 
@@ -61,10 +63,10 @@ export const bookingApi = {
   },
 
   // 선점만 풀기(결제 안 함) — 잔여 수량 복구
-  async release(courseId, roundId, grade, quantity) {
+  async release(courseId, roundId, grade, quantity, holdId = null) {
     if (FEATURES.holdApi) {
-      return unwrap(await api.delete('/api/bookings/hold', {
-        data: { performanceId: courseId, scheduleId: roundId, grade, quantity }
+      return unwrap(await api.delete('/api/enrollments/holds', {
+        data: { holdId, performanceId: courseId, scheduleId: roundId, grade, quantity }
       }))
     }
     return mock.release(courseId, roundId, grade, quantity)

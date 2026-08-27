@@ -58,8 +58,10 @@ public class PaymentKafkaProducer {
     @Builder
     public static class PaymentCompletedEvent {
         private Long paymentId;
+        private Long enrollmentId;
         private Long userId;
         private Long courseId;
+        private Integer quantity;
         private String status;
     }
 }
