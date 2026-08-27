@@ -150,6 +150,44 @@ CONCERT_WAITERS = [
     },
 ]
 
+
+def _build_forecast_demo_waiters() -> list:
+    """B2B 수요 분석 시연용 추가 대기자 75명을 만든다.
+
+    기존 10명은 단건·대량 매칭 시나리오를 보존한다. 뒤에 붙는 75명은 실제
+    waitlist_store에 같은 방식으로 주입되어 B2C 대기 데이터가 B2B 미충족
+    수요 분석으로 이어지는 흐름을 보여준다.
+
+    추가 요청 좌석 수는 115석(1석 40명, 2석 30명, 3석 5명)이다.
+    기존 16석과 합쳐 courseId=1은 85명, 총 131석이 된다.
+    """
+    counts = [1] * 40 + [2] * 30 + [3] * 5
+    texts = (
+        "주말 저녁이면 좋고 자리는 어디든 괜찮아요.",
+        "가능하면 S등급으로 보고 싶어요. 일정은 유연합니다.",
+        "친구와 함께 갈 예정인데 붙어 있으면 좋겠습니다.",
+        "공연만 볼 수 있으면 괜찮아요. 취소표 기다릴게요.",
+        "토요일 오후나 저녁 회차를 선호합니다.",
+    )
+    waiters = []
+    for index, count in enumerate(counts, start=11):
+        preferred = {"grade": ["S"]} if index % 3 else {}
+        flexible = {"allow_split": True, "max_split_gap": 3} if count > 1 else {}
+        waiters.append({
+            "user_id": 100 + index,
+            "seq": index,
+            "raw_text": texts[(index - 11) % len(texts)],
+            "parsed": {
+                "required": {"count": count},
+                "preferred": preferred,
+                "flexible": flexible,
+            },
+        })
+    return waiters
+
+
+CONCERT_WAITERS.extend(_build_forecast_demo_waiters())
+
 # courseId=2 뮤지컬. VIP(240,000원)·R(150,000원) 등 좋은 자리만 매진된 상황이다.
 MUSICAL_WAITERS = [
     {

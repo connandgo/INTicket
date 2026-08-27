@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from app.config.settings import settings
 from app.data import seed
 from app.kafka.consumer import enrollment_consumer
-from app.router import recommend_router, waitlist_router
+from app.router import forecast_router, recommend_router, waitlist_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +63,8 @@ app = FastAPI(
 
 # 라우터 등록
 # ⚠️ 순서 중요: recommend_router에 "/api/recommend/{user_id}" 가 있어서 나중에 등록해야 한다.
-# 먼저 등록하면 "/api/recommend/waitlists" 가 {user_id}에 먼저 매칭돼 422가 난다.
+# forecast/waitlist를 먼저 등록하면 {user_id} 경로에 먼저 매칭되는 422를 막을 수 있다.
+app.include_router(forecast_router.router)
 app.include_router(waitlist_router.router)
 app.include_router(recommend_router.router)
 
