@@ -14,7 +14,9 @@
       <template v-else>
         <!-- 단계 -->
         <ol class="steps">
-          <li :class="{ on: step === 1, done: step > 1 }"><span class="num">1</span>좌석 등급</li>
+          <li :class="{ on: step === 1, done: step > 1 }">
+            <span class="num">1</span>{{ fromOffer ? '좌석 배정' : '좌석 등급' }}
+          </li>
           <li :class="{ on: step === 2, done: step > 2 }"><span class="num">2</span>선점 · 결제</li>
           <li :class="{ on: step === 3 }"><span class="num">3</span>완료</li>
         </ol>
@@ -93,6 +95,10 @@
             <span class="t-v num">{{ mmss }}</span>
           </div>
 
+          <p v-if="fromOffer" class="alert alert-ok">
+            취소표 매칭으로 <b>배정된 좌석</b>입니다. 등급을 다시 고를 필요 없이 결제만 하시면 됩니다.
+          </p>
+
           <h2 class="stitle">결제 내역</h2>
           <dl class="dl">
             <div><dt>좌석 등급</dt><dd>{{ held.grade }}석</dd></div>
@@ -157,6 +163,8 @@ const round = ref(null)
 const loading = ref(true)
 
 const step = ref(1)
+// 취소표 매칭에서 좌석을 배정받아 넘어왔는지. 화면 문구만 달라진다.
+const fromOffer = ref(false)
 const grade = ref('')
 const qty = ref(1)
 const selectedSeats = ref([])
@@ -194,8 +202,32 @@ const mmss = computed(() => {
 onMounted(async () => {
   await store.fetchCourse(route.params.id)
   if (c.value) round.value = await performanceApi.round(c.value, route.query.round)
+  // 자동 선점까지 끝낸 뒤에 화면을 연다. 먼저 열면 등급 선택 화면이 한 번
+  // 깜빡였다가 결제 화면으로 바뀌어 보인다.
+  await applyOfferSeats()
   loading.value = false
 })
+
+// 취소표 매칭으로 넘어온 경우(?seats=S-Q-5,S-Q-6) 자리가 이미 정해져 있다.
+// 등급·매수를 다시 고르게 하지 않고 곧장 선점해서 결제 단계로 보낸다.
+// 선점에 실패하면 fromOffer 를 되돌려 평소대로 1단계에서 고르게 둔다.
+async function applyOfferSeats() {
+  const raw = String(route.query.seats || '').trim()
+  if (!raw || !round.value) return
+
+  const seats = raw.split(',').map((x) => x.trim()).filter(Boolean)
+  // 좌석 ID 는 "{등급}-{열}-{번호}" 형식이다 (recommend-service app/data/seats.py)
+  const g = seats[0]?.split('-')[0]
+  if (!g || !round.value.grades.some((x) => x.grade === g)) return
+
+  fromOffer.value = true
+  grade.value = g
+  qty.value = Math.min(seats.length, 4)
+  selectedSeats.value = seats
+
+  await doHold()
+  if (step.value !== 2) fromOffer.value = false
+}
 
 onBeforeUnmount(() => {
   stopTimer()
@@ -260,6 +292,7 @@ function expire() {
   releaseHeld()
   held.value = null
   step.value = 1
+  fromOffer.value = false
   err.value = '결제 시간이 지나 선점이 풀렸습니다. 다시 선택해 주세요.'
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
@@ -275,6 +308,7 @@ function backToPick() {
   releaseHeld()
   held.value = null
   step.value = 1
+  fromOffer.value = false
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
 

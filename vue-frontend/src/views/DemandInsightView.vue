@@ -28,7 +28,6 @@
         <!-- 서버가 응답하면(aiEnabled 가 false 여도 폴백 계산 결과) 이 안내는 뜨지 않는다 -->
         <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
           AI 서비스가 아직 예측을 제공하지 않아 <b>대기·판매 데이터 기반 임시 추정치</b>로 표시하고 있습니다.
-          <code>GET /api/recommend/forecast/{{ course.id }}</code> 가 실제 결과를 돌려주면 그대로 대체됩니다.
         </p>
 
         <!-- 상단 4칸 -->
