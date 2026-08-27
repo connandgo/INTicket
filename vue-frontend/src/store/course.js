@@ -4,6 +4,12 @@ import { courseApi } from '@/api/course.js'
 import { genreLabel } from '@/domain/genre.js'
 import { SHOWCASE, findShowcase } from '@/data/showcase.js'
 
+// 서버에 닿지 못했는지. 프론트만 실행하면 개발 서버가 502 를 돌려준다.
+function unreachable(e) {
+  if (!e.response) return true
+  return [502, 503, 504].includes(e.response.status)
+}
+
 // 서버 응답이 { success, data, message } 껍데기로 오기도 하고 그냥 오기도 한다.
 function unwrap(res) {
   const d = res?.data
@@ -44,9 +50,10 @@ export const useCourseStore = defineStore('course', () => {
       courses.value = Array.isArray(list) ? list : []
     } catch (e) {
       console.error('[course] 목록 조회 실패:', e)
-      if (e.response?.status === 401) {
-        // 둘러보기까지 막을 이유는 없다. 내장 카탈로그로 채우고
-        // 예매 단계에서만 로그인을 요구한다.
+      // 401 은 비로그인, 응답이 없거나 502~504 면 서버에 닿지 못한 것이다.
+      // 어느 쪽이든 둘러보기까지 막을 이유는 없다. 내장 카탈로그로 채우고
+      // 예매 단계에서만 로그인을 요구한다.
+      if (e.response?.status === 401 || unreachable(e)) {
         courses.value = SHOWCASE
         isShowcase.value = true
       } else {
@@ -71,7 +78,7 @@ export const useCourseStore = defineStore('course', () => {
     } catch (e) {
       console.error('[course] 상세 조회 실패:', e)
       // 백엔드는 없는 id에 404가 아니라 400 + "강의를 찾을 수 없습니다"로 답한다
-      if (e.response?.status === 401) {
+      if (e.response?.status === 401 || unreachable(e)) {
         const sc = findShowcase(id)
         if (sc) { current.value = sc; isShowcase.value = true }
         else needsLogin.value = true
