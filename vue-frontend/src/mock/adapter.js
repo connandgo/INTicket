@@ -60,6 +60,29 @@ function autoMatch(db, courseId) {
   course.enrollmentCount += 1
 }
 
+// 서버 LLM 파싱을 흉내낸다. 결과 모양은 실제 계약과 같다.
+function mockParse(text) {
+  const t = (text || '').toLowerCase()
+  const required = {}
+  const preferred = {}
+  const flexible = {}
+
+  const q = t.match(/(\d+)\s*(명|장|매|자리|석)/)
+  if (q) required.count = Number(q[1])
+  const price = t.match(/(\d+)\s*만\s*원?\s*(이하|아래|까지)/)
+  if (price) required.max_price = Number(price[1]) * 10000
+
+  const g = ['VIP', 'R', 'S', 'A'].filter((x) => new RegExp(`${x}\\s*석`, 'i').test(text))
+  if (g.length) (/무조건|반드시|꼭/.test(t) ? required : preferred).grade = g
+  else if (/앞자리|앞쪽|가까운|무대/.test(t)) preferred.grade = ['VIP', 'R']
+
+  if (/붙어|나란히|연석|같이 앉/.test(t)) preferred.row = 'same'
+  if (/떨어져|따로 앉|나눠 앉/.test(t)) flexible.allow_split = true
+  if (/비싸도|가격 상관/.test(t)) flexible.price_ceiling = null
+
+  return { required, preferred, flexible }
+}
+
 export default async function mockAdapter(config) {
   await delay()
 
@@ -244,6 +267,87 @@ export default async function mockAdapter(config) {
   if (url === '/api/enrollments/waitlist/my' && method === 'get') {
     if (!me) return fail(config, '인증이 필요합니다', 401)
     return ok(config, db.waitlist.filter((w) => w.userId === me.id).sort((a, b) => b.id - a.id))
+  }
+
+  /* ---------- AI 취소표 매칭 (recommend-service, 래퍼 없음) ----------
+     서버 계약을 그대로 흉내낸다. 응답 모양이 같아야 데모에서 확인한 흐름이
+     실서버에서도 그대로 동작한다. */
+
+  if (url === '/api/recommend/waitlists' && method === 'post') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    const parsed = mockParse(body.conditionText || '')
+    const seq = db.waitlist.filter((w) => w.courseId === Number(body.courseId)).length + 1
+    const w = {
+      waitlistId: nextId(db, 'waitlist'),
+      courseId: Number(body.courseId),
+      userId: me.id,
+      seq,
+      rawText: body.conditionText || '',
+      parsed,
+      status: 'WAITING',
+      createdAt: new Date().toISOString()
+    }
+    db.waitlist.push(w)
+    write(db)
+    return raw(config, { waitlistId: w.waitlistId, seq: w.seq, parsed })
+  }
+
+  if (url === '/api/recommend/waitlists/my' && method === 'get') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    return raw(config, db.waitlist
+      .filter((w) => w.userId === me.id && w.parsed)
+      .map((w) => ({ waitlistId: w.waitlistId, courseId: w.courseId, seq: w.seq, rawText: w.rawText, parsed: w.parsed })))
+  }
+
+  if (url === '/api/recommend/offers/my' && method === 'get') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    return raw(config, (db.offers || []).filter((o) => o.userId === me.id))
+  }
+
+  m = url.match(/^\/api\/recommend\/offers\/([^/]+)\/accept$/)
+  if (m && method === 'post') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    const o = (db.offers || []).find((x) => x.offerId === m[1] && x.userId === me.id)
+    if (!o) return raw(config, { success: false, message: '제안을 찾을 수 없습니다.' })
+    o.status = 'ACCEPTED'
+    db.enrollments.push({
+      id: nextId(db, 'enrollment'),
+      userId: me.id,
+      courseId: o.courseId,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
+      course: null
+    })
+    const c = db.courses.find((x) => x.id === o.courseId)
+    if (c) c.enrollmentCount += 1
+    const w = db.waitlist.find((x) => x.userId === me.id && x.courseId === o.courseId)
+    if (w) w.status = 'MATCHED'
+    write(db)
+    return raw(config, { success: true, message: `${o.seatsText} 좌석으로 예매되었습니다.` })
+  }
+
+  if (url === '/api/recommend/internal/released' && method === 'post') {
+    const seats = body.seats || []
+    const next = db.waitlist
+      .filter((w) => w.courseId === Number(body.courseId) && w.status === 'WAITING' && w.parsed)
+      .sort((a, b) => a.seq - b.seq)[0]
+    if (!next) return raw(config, { matched: 0, offers: [], reason: '조건에 맞는 대기자가 없습니다.', mode: 'NONE' })
+
+    db.offers ||= []
+    const offer = {
+      offerId: `of-${Date.now()}`,
+      userId: next.userId,
+      courseId: next.courseId,
+      seats,
+      seatsText: seats.join(', '),
+      message: `요청하신 조건에 맞는 ${seats.join(', ')} 좌석이 나왔습니다.`,
+      reason: `대기 ${next.seq}번, 요청 조건과 좌석 등급·매수가 일치해 우선 배정했습니다.`,
+      expiresAt: Date.now() / 1000 + 600,
+      status: 'PENDING'
+    }
+    db.offers.push(offer)
+    write(db)
+    return raw(config, { matched: 1, offers: [offer], reason: offer.reason, mode: 'SINGLE' })
   }
 
   /* ---------- 추천 (FastAPI, 래퍼 없음) ---------- */

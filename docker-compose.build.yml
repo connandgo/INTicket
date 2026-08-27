@@ -248,6 +248,13 @@ services:
       - ENROLLMENT_SERVICE_URL=http://enrollment-service:8083
       - COURSE_SERVICE_URL=http://course-service:8082
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      # AI 취소표 매칭용 LLM 설정.
+      # 키는 파일에 적지 않고 호스트 환경변수에서 읽는다.
+      #   export LLM_API_KEY=... 후 docker compose up
+      # 값을 주지 않으면 llm_api_key 가 비어 자동으로 폴백 경로로 동작한다.
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_ENABLED=${LLM_ENABLED:-true}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
       eureka-server:
         condition: service_healthy

@@ -73,6 +73,32 @@
 
         <p v-if="cancelErr" class="alert alert-err">{{ cancelErr }}</p>
 
+        <!-- AI가 보낸 좌석 제안 -->
+        <section v-if="offers.length" class="osec">
+          <h2 class="stitle">AI 좌석 제안</h2>
+          <p class="onote small">
+            취소표가 나와 조건에 맞는 좌석을 찾았습니다. 수락하시면 바로 예매됩니다.
+          </p>
+
+          <ul class="orows">
+            <li v-for="o in offers" :key="o.offerId" class="orow">
+              <div class="o-main">
+                <p class="o-seats num">{{ o.seatsText || o.seats.join(', ') }}</p>
+                <p class="o-msg">{{ o.message }}</p>
+                <p v-if="o.reason" class="o-why">{{ o.reason }}</p>
+              </div>
+              <div class="o-act">
+                <span class="o-left num">{{ leftText(o.expiresAt) }}</span>
+                <button class="btn btn-red btn-sm" :disabled="accepting === o.offerId"
+                        @click="accept(o)">
+                  {{ accepting === o.offerId ? '처리 중' : '수락하고 예매' }}
+                </button>
+              </div>
+            </li>
+          </ul>
+          <p v-if="offerErr" class="alert alert-err">{{ offerErr }}</p>
+        </section>
+
         <!-- 취소표 대기 (Sprint2) -->
         <section v-if="wait.items.length" class="wsec">
           <h2 class="stitle">취소표 대기</h2>
@@ -108,6 +134,7 @@ import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollme
 import { useWaitlistStore, WAIT_LABEL, WAIT_STYLE } from '@/store/waitlist.js'
 import { useCourseStore } from '@/store/course.js'
 import { isNotDeployed } from '@/domain/soldout.js'
+import { seatWishApi } from '@/api/seatWish.js'
 import { bookingApi } from '@/api/booking.js'
 import { genreLabel } from '@/domain/genre.js'
 
@@ -115,6 +142,45 @@ const store = useEnrollmentStore()
 const wait = useWaitlistStore()
 const courses = useCourseStore()
 const POLL_SEC = 15
+
+/* AI 좌석 제안 — 취소가 발생하면 서버가 조건에 맞는 대기자에게 발행한다.
+   푸시가 없으므로 대기 폴링과 같은 주기로 함께 확인한다. */
+const offers = ref([])
+const accepting = ref(null)
+const offerErr = ref('')
+
+async function loadOffers() {
+  try {
+    offers.value = (await seatWishApi.myOffers()).filter((o) => o.status === 'PENDING' || !o.status)
+  } catch {
+    offers.value = []   // 비로그인·미배포 등은 조용히 넘어간다
+  }
+}
+
+function leftText(expiresAt) {
+  if (!expiresAt) return ''
+  const sec = Math.max(0, Math.round(expiresAt - Date.now() / 1000))
+  const m = Math.floor(sec / 60)
+  return sec === 0 ? '만료됨' : `${m}분 ${sec % 60}초 남음`
+}
+
+async function accept(o) {
+  accepting.value = o.offerId
+  offerErr.value = ''
+  try {
+    const r = await seatWishApi.acceptOffer(o.offerId)
+    if (r && r.success === false) {
+      offerErr.value = r.message || '제안을 수락하지 못했습니다.'
+    }
+    await loadOffers()
+    await store.fetchMine()
+  } catch (e) {
+    console.error('[offer] 수락 실패:', e)
+    offerErr.value = e.response?.data?.detail || '제안을 수락하지 못했습니다.'
+  } finally {
+    accepting.value = null
+  }
+}
 
 // 대기 응답에는 courseId 만 온다. 공연명은 목록에서 찾아 붙인다.
 function courseTitle(id) {
@@ -152,10 +218,11 @@ onBeforeUnmount(() => wait.stopPolling())
 
 onMounted(async () => {
   await wait.fetchMine()
+  await loadOffers()
   // 대기 목록에 공연명을 붙이려면 공연 목록이 필요하다.
   if (wait.items.length && !courses.courses.length) courses.fetchCourses()
   // 서버가 매칭을 먼저 알려주지 않으므로 대기 중일 때만 주기적으로 다시 읽는다.
-  wait.startPolling(() => store.fetchMine(), POLL_SEC * 1000)
+  wait.startPolling(() => { store.fetchMine(); loadOffers() }, POLL_SEC * 1000)
 
   await store.fetchMine()
   // 모의 결제가 곧바로 끝나므로 PENDING이 남아 있으면 잠깐 뒤 한 번 더 읽는다.
@@ -211,6 +278,21 @@ function fmt(iso) {
 .confirm { display: inline-flex; align-items: center; gap: 6px; }
 .c-q { font-size: 12px; color: var(--t2); }
 .rprice { font-size: 14px; font-weight: 700; }
+
+.osec { margin-top: 40px; }
+.onote { color: var(--t2); margin-bottom: 12px; }
+.orows { border-top: 2px solid var(--ai); }
+.orow {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 14px 6px; border-bottom: 1px solid var(--line);
+  background: var(--ai-wash);
+}
+.o-main { flex: 1; min-width: 0; }
+.o-seats { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+.o-msg { font-size: 13.5px; color: var(--t1); margin-top: 5px; line-height: 1.6; }
+.o-why { font-size: 12px; color: var(--t3); margin-top: 4px; line-height: 1.55; }
+.o-act { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex-shrink: 0; }
+.o-left { font-size: 11.5px; color: var(--red); font-weight: 700; }
 
 .wsec { margin-top: 40px; }
 .wnote { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
