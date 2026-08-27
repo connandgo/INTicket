@@ -26,6 +26,18 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false
+      },
+      // OIDC 로그아웃(/connect/logout) 전용 통로.
+      //
+      // 게이트웨이(:8080)의 라우트 목록에 /connect/** 가 없어서 :8080 으로 부르면
+      // 인증이 필요한 API 로 취급돼 401 이 난다. 그래서 인증 서버(:9000)로 직접 보낸다.
+      // 같은 출처로 나가므로 인증 서버 세션 쿠키가 함께 실린다(쿠키는 포트를 구분하지 않음).
+      //
+      // 게이트웨이에 /connect/** 라우트가 추가되면 이 프록시는 지워도 된다.
+      '/connect': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        secure: false
       }
       // /login, /logout, /userinfo 는 프록시하지 않는다.
       // /login 은 이 앱의 라우트라서, 프록시를 걸면 주소창에 직접 치거나

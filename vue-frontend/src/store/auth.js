@@ -82,17 +82,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
-  // Spring Security 의 /logout 은 CSRF 때문에 GET 으로는 세션이 안 끊긴다.
-  // 그래서 표준 OIDC RP-Initiated Logout(/connect/logout)을 쓴다.
-  // 이 인증 서버에는 post_logout_redirect_uri 로 http://localhost:3000/ 이
-  // 등록되어 있어서, 세션을 끊은 뒤 우리 앱 홈으로 되돌려 보내 준다.
+  // 게이트웨이(:8080)에는 /connect/** 라우트가 없어서 거기로 부르면 401 이 난다.
+  // 그래서 vite 프록시를 통해 인증 서버(:9000)의 /connect/logout 으로 직접 보낸다.
+  // 같은 출처로 나가므로 세션 쿠키가 함께 실린다(쿠키는 포트를 구분하지 않음).
+  //
+  // id_token_hint 가 있어야 인증 서버가 누구를 로그아웃할지 알고,
+  // post_logout_redirect_uri 로 우리 앱에 되돌려 보내 준다(클라이언트에 등록된 값).
   function fullLogout() {
     const hint = idToken.value
     clearSession()
 
     if (!hint) {
-      // id_token 이 없으면(예전 세션 등) 되돌아올 방법이 없다.
-      // 세션이라도 끊고 인증 서버 로그아웃 화면에 맡긴다.
+      // id_token 이 없는 예전 세션. 되돌아올 수는 없어도 세션은 끊는다.
       window.location.href = `${AUTH_SERVER_URL}/logout`
       return
     }
@@ -101,7 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
       id_token_hint: hint,
       post_logout_redirect_uri: POST_LOGOUT_URI
     })
-    window.location.href = `${AUTH_SERVER_URL}/connect/logout?${params.toString()}`
+    window.location.href = `/connect/logout?${params.toString()}`
   }
 
   // OAuth2 Authorization Code Flow
