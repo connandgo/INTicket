@@ -114,9 +114,16 @@ export const useAuthStore = defineStore('auth', () => {
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
       // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
       scope: 'openid',
-      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터.
-      // 인증 서버가 무시할 수도 있어서, 확실한 건 fullLogout() 쪽이다.
-      prompt: 'login'
+      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터 두 개.
+      //
+      // prompt=login : 재인증을 요청한다. 서버가 무시할 수 있다.
+      // max_age=0    : 마지막 인증 이후 0초를 넘겼으면 다시 인증하라는 뜻.
+      //                항상 초과이므로 사실상 '매번 로그인 폼을 띄워라'가 된다.
+      //
+      // 인증 서버 세션을 끊는 데 의존하지 않으려고 붙였다. 로그아웃이 세션을
+      // 못 끊어도 이 파라미터 때문에 아이디·비밀번호를 다시 묻는다.
+      prompt: 'login',
+      max_age: '0'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`
