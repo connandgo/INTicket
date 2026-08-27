@@ -154,13 +154,13 @@
             </button>
 
             <div v-if="simResult" class="s-out">
-              <p class="s-o-t">✦ AI 예측 결과</p>
+              <p class="s-o-t">예측 결과</p>
               <dl class="s-o-d">
                 <div><dt>예상 관객</dt><dd class="num">{{ simResult.expectedAudience.toLocaleString() }}명</dd></div>
                 <div><dt>예상 판매율</dt><dd class="num">{{ (simResult.expectedRate * 100).toFixed(1) }}%</dd></div>
                 <div><dt>현재 유효수요 중 예상 전환율</dt><dd class="num">{{ (simResult.conversionRate * 100).toFixed(1) }}%</dd></div>
               </dl>
-              <p class="s-o-v"><span class="bdg bdg-ai">★ {{ simResult.verdict.label }}</span></p>
+              <p class="s-o-v"><span class="bdg bdg-ai">{{ simResult.verdict.label }}</span></p>
             </div>
           </article>
         </section>
@@ -175,7 +175,7 @@
               </thead>
               <tbody>
                 <tr v-for="c in a.candidates" :key="c.rank">
-                  <td class="rk">{{ c.rank === 1 ? '👑' : c.rank }}</td>
+                  <td class="rk" :class="{ top: c.rank === 1 }">{{ c.rank }}</td>
                   <td><b>{{ c.weekday }}요일</b> <span class="num">{{ c.time }}</span></td>
                   <td class="r num">{{ c.expectedAudience.toLocaleString() }}명</td>
                   <td>
@@ -193,11 +193,11 @@
           </article>
 
           <article class="card card-pad ins">
-            <h2 class="s-t">💡 AI 인사이트</h2>
+            <h2 class="s-t">AI 인사이트</h2>
             <ul class="ins-l">
               <li v-for="(t, i) in a.insights" :key="i">{{ t }}</li>
             </ul>
-            <p class="ins-r">★ {{ a.recommendation }}</p>
+            <p class="ins-r">{{ a.recommendation }}</p>
           </article>
         </section>
       </template>
@@ -354,7 +354,17 @@ async function runSim() {
 .cand th, .cand td { padding: 11px 8px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; }
 .cand th { font-size: 11.5px; color: var(--t3); font-weight: 600; border-bottom-color: var(--line-dark); }
 .cand .r { text-align: right; }
-.rk { font-size: 14px; }
+.rk { font-size: 13px; color: var(--t3); font-family: var(--num); }
+/* 1위는 이모지 대신 색과 굵기로 구분한다 */
+.rk.top {
+  color: var(--ai); font-weight: 800;
+  position: relative; padding-left: 9px;
+}
+.rk.top::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  width: 3px; height: 13px; transform: translateY(-50%);
+  background: var(--ai); border-radius: 1px;
+}
 .bar { display: inline-block; width: 130px; height: 8px; background: var(--bg-dim); border-radius: 5px; overflow: hidden; vertical-align: middle; }
 .bar i { display: block; height: 100%; background: var(--ai); }
 .br { font-size: 12px; margin-left: 8px; color: var(--t2); }

@@ -68,17 +68,19 @@ const oneLine = computed(() => {
   font-weight: 700;
 }
 
-/* 매진이면 포스터를 덮어 바로 알아보게 한다 */
+/* 매진 표시. 포스터 가운데를 덮으면 공연명과 겹쳐 둘 다 못 읽는다.
+   실제 예매 사이트처럼 하단 띠로 두고, 포스터는 살짝 눌러 구분한다. */
+.thumb:has(.sold) :deep(.poster) { filter: saturate(.45) brightness(.72); }
 .sold {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(23,27,34,.62);
+  left: 0; right: 0; bottom: 0;
+  padding: 7px 0;
+  text-align: center;
+  background: rgba(14,17,22,.88);
   color: #fff;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: .08em;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
 }
 
 .info { padding: 11px 2px 0; }
