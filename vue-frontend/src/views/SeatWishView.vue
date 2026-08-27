@@ -220,7 +220,13 @@ async function goPay() {
       return
     }
     modal.value = null
-    router.push(`/courses/${route.params.id}/booking?round=${round.value.id}`)
+    // 배정받은 좌석을 들고 결제 화면으로 넘어간다.
+    // 이미 자리가 정해진 상태라 등급을 다시 고를 이유가 없다.
+    // 예매 화면은 seats 가 있으면 1단계를 건너뛰고 곧바로 선점·결제로 간다.
+    router.push({
+      path: `/courses/${route.params.id}/booking`,
+      query: { round: round.value.id, seats: (offer.seats || []).join(',') }
+    })
   } catch (e) {
     console.error('[매칭] 수락 실패:', e)
     matchedNote.value = '제안을 수락하지 못했습니다. 잠시 후 다시 시도해 주세요.'
