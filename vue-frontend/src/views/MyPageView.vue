@@ -29,7 +29,7 @@
         <table v-else class="tbl">
           <thead>
             <tr>
-              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">AI 분석</th>
+              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">수요 분석</th>
             </tr>
           </thead>
           <tbody>

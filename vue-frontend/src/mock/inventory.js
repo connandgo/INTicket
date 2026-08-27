@@ -8,8 +8,11 @@
 
 import { HOLD_MINUTES } from '@/config/features.js'
 import { SEAT_GRADES, GRADE_ORDER, capacityOf } from '@/data/seatLayout.js'
+import { seatsLeft } from '@/domain/soldout.js'
 
-const KEY = 'inticket.inventory.v1'
+// v2: 백엔드 잔여(capacity - enrollmentCount)에 총량을 맞추기 시작했다.
+// v1 저장값은 매진 공연에도 수백 석이 남아 있어 그대로 쓰면 안 된다.
+const KEY = 'inticket.inventory.v2'
 
 // 등급·가격·정원은 서버 좌석 배치도(seats.py)를 그대로 따른다.
 // 공연 가격에서 배수로 계산하면 AI 가 배정하는 좌석의 등급·가격과 어긋난다.
@@ -69,7 +72,51 @@ function seedFor(course) {
     }
   })
 
-  return { courseId: Number(course.id), rounds }
+  const performance = { courseId: Number(course.id), rounds }
+  fitToCourseStock(performance, course)
+  return performance
+}
+
+// 지어낸 판매량을 백엔드가 말하는 잔여 좌석에 맞춘다.
+//
+// 회차·좌석 재고 API 가 없어서 판매량을 여기서 만들어 쓰는데, 그러다 보니
+// 목록에서는 매진인 공연이 상세로 들어가면 잔여 660석으로 보였다.
+// 같은 공연을 두고 화면마다 다른 말을 하는 셈이라 총량만이라도 맞춰 둔다.
+//
+// capacity 가 null 이면 백엔드 기준 무제한이므로 손대지 않는다.
+function fitToCourseStock(performance, course) {
+  const target = seatsLeft(course)
+  if (target === null) return
+
+  // 지어낸 잔여를 가중치로 삼아 실제 잔여를 나눠 준다.
+  // 등급별로 팔린 정도가 달랐던 모양은 유지하면서 합계만 맞춘다.
+  const cells = []
+  let weight = 0
+  for (const round of performance.rounds) {
+    for (const g of round.grades) {
+      const left = Math.max(0, g.capacity - g.sold)
+      cells.push({ g, left, share: 0 })
+      weight += left
+    }
+  }
+  if (!cells.length) return
+
+  let assigned = 0
+  for (const cell of cells) {
+    cell.share = weight > 0 ? Math.min(cell.g.capacity, Math.floor((target * cell.left) / weight)) : 0
+    assigned += cell.share
+  }
+  // 내림으로 남은 몫은 원래 잔여가 많던 칸부터 채운다
+  let rest = target - assigned
+  for (const cell of [...cells].sort((x, y) => y.left - x.left)) {
+    if (rest <= 0) break
+    const room = cell.g.capacity - cell.share
+    const add = Math.min(room, rest)
+    cell.share += add
+    rest -= add
+  }
+
+  for (const cell of cells) cell.g.sold = cell.g.capacity - cell.share
 }
 
 export function getPerformance(course) {

@@ -75,7 +75,7 @@
 
         <!-- AI가 보낸 좌석 제안 -->
         <section v-if="offers.length" class="osec">
-          <h2 class="stitle">AI 좌석 제안</h2>
+          <h2 class="stitle">배정된 좌석</h2>
           <p class="onote small">
             취소표가 나와 조건에 맞는 좌석을 찾았습니다. 수락하시면 바로 예매됩니다.
           </p>
