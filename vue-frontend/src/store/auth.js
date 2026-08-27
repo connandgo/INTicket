@@ -82,28 +82,42 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
-  // Spring Security 의 /logout 은 CSRF 때문에 GET 으로는 세션이 안 끊긴다.
-  // 그래서 표준 OIDC RP-Initiated Logout(/connect/logout)을 쓴다.
-  // 이 인증 서버에는 post_logout_redirect_uri 로 http://localhost:3000/ 이
-  // 등록되어 있어서, 세션을 끊은 뒤 우리 앱 홈으로 되돌려 보내 준다.
-  function fullLogout() {
+  // 인증 서버의 /connect/logout 이 세션을 확실히 끊어 주는지 확인할 수 없었고,
+  // 세션 쿠키(JSESSIONID)는 HttpOnly 라 브라우저 JS 로도 못 지운다.
+  //
+  // 다행히 그 쿠키는 Domain 없이 host(localhost)에 심겨서 포트가 달라도
+  // 우리 dev 서버로 함께 전송된다. 그래서 dev 서버가 만료 헤더를 내려주는
+  // /kill-session 을 불러 브라우저가 쿠키를 지우게 한다(vite.config.js 참고).
+  //
+  // 그다음 표준 OIDC 로그아웃도 함께 호출해 서버 쪽 세션도 정리한다.
+  async function fullLogout() {
     const hint = idToken.value
     clearSession()
 
-    if (!hint) {
-      // id_token 이 없으면(예전 세션 등) 되돌아올 방법이 없다.
-      // 세션이라도 끊고 인증 서버 로그아웃 화면에 맡긴다.
-      window.location.href = `${AUTH_SERVER_URL}/logout`
-      return
+    // 1) 브라우저가 들고 있는 인증 서버 세션 쿠키를 지운다 (확실한 쪽)
+    try {
+      await fetch('/kill-session', { credentials: 'include', cache: 'no-store' })
+    } catch (e) {
+      console.warn('[auth] 세션 쿠키 삭제 실패:', e)
     }
 
-    const params = new URLSearchParams({
-      id_token_hint: hint,
-      post_logout_redirect_uri: POST_LOGOUT_URI
-    })
-    // 게이트웨이(:8080)에는 /connect/** 라우트가 없어 401 이 난다.
-    // vite 프록시(/connect → :9000)를 타도록 상대경로로 보낸다.
-    window.location.href = `/connect/logout?${params.toString()}`
+    // 2) 서버 쪽 세션도 정리한다. 실패해도 1) 만으로 재로그인 시 폼이 뜬다.
+    if (hint) {
+      const params = new URLSearchParams({
+        id_token_hint: hint,
+        post_logout_redirect_uri: POST_LOGOUT_URI
+      })
+      try {
+        await fetch(`/connect/logout?${params.toString()}`, {
+          credentials: 'include',
+          redirect: 'manual'
+        })
+      } catch (e) {
+        console.warn('[auth] OIDC 로그아웃 호출 실패:', e)
+      }
+    }
+
+    window.location.href = '/'
   }
 
   // OAuth2 Authorization Code Flow
