@@ -10,19 +10,8 @@ function unwrap(res) {
   return d && typeof d === 'object' && 'data' in d ? d.data : d
 }
 
+// 공연 목록·상세·등록은 api/course.js 가 담당한다. 여기는 회차·좌석등급만 본다.
 export const performanceApi = {
-  list() {
-    return api.get('/api/courses').then(unwrap)
-  },
-
-  byId(id) {
-    return api.get(`/api/courses/${id}`).then(unwrap)
-  },
-
-  create(payload) {
-    return api.post('/api/courses', payload).then(unwrap)
-  },
-
   // 회차 + 좌석등급별 가격·잔여
   async rounds(course) {
     if (FEATURES.scheduleApi) {

@@ -19,17 +19,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// 공연 조회에도 인증이 필요하므로(API_SPEC 2절), 비로그인 상태의 401은 정상이다.
+// 토큰을 들고 있는데 401이 났을 때만 만료로 보고 세션을 정리한다.
+// 화면 이동은 각 화면이 판단한다 — 여기서 강제 이동시키면 공개 화면까지 튕긴다.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      console.error('[API] 401 Unauthorized')
-      console.error('[API] response data =', err.response?.data)
-      console.error('[API] request url =', err.config?.url)
-      // 디버깅 중에는 자동 로그아웃/리다이렉트 잠시 비활성화
-      // const auth = useAuthStore()
-      // auth.logout()
-      // window.location.href = '/login'
+      const auth = useAuthStore()
+      if (auth.accessToken) {
+        console.warn('[API] 401 — 토큰이 만료된 것으로 보고 세션을 정리합니다:', err.config?.url)
+        auth.logout(false)
+      }
     }
     return Promise.reject(err)
   }

@@ -50,6 +50,12 @@
         <section class="body">
           <h2 class="stitle">회차 선택</h2>
 
+          <!-- 실서버에 붙어 있어도 회차·좌석등급 API는 아직 없다. 화면에 숨기지 않는다. -->
+          <p v-if="!scheduleFromServer" class="alert alert-info sched-note">
+            회차와 좌석 등급은 아직 <b>프론트엔드 임시 데이터</b>입니다.
+            공연 조회·예매·결제·추천은 실제 서버와 연동되어 있습니다.
+          </p>
+
           <div v-if="loadingRounds" class="load"><span class="spin"></span>회차를 불러오는 중입니다</div>
 
           <div v-else-if="!rounds.length" class="blank">
@@ -120,7 +126,7 @@ import { useCourseStore } from '@/store/course.js'
 import { useAuthStore } from '@/store/auth.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
-import { HOLD_MINUTES } from '@/config/features.js'
+import { HOLD_MINUTES, FEATURES } from '@/config/features.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -133,6 +139,7 @@ const isViewer = computed(() => auth.user?.role !== 'INSTRUCTOR')
 
 const rounds = ref([])
 const loadingRounds = ref(false)
+const scheduleFromServer = FEATURES.scheduleApi
 
 function totalLeft(r) {
   return r.grades.reduce((a, g) => a + remaining(g), 0)
@@ -164,6 +171,9 @@ onMounted(async () => {
 .price { font-size: 19px; font-weight: 800; color: var(--red); }
 
 .body { margin-top: 46px; }
+
+.sched-note { margin-bottom: 14px; }
+.sched-note b { font-weight: 700; }
 
 .rounds { border-top: 2px solid var(--navy); }
 .rd {

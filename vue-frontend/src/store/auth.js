@@ -72,7 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
       response_type: 'code',
       client_id: import.meta.env.VITE_CLIENT_ID,
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
-      scope: 'openid profile read write'
+      // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
+      scope: 'openid'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`
