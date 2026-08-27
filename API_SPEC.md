@@ -157,9 +157,33 @@ Response (200)
       "price": 55000, "thumbnail": null, "instructorName": null, "enrollmentCount": 1
     } } ] }
 ```
-`status`: `PENDING`(결제 처리 중) → `ACTIVE`(예매 확정) → `CANCELLED`(취소, 이번 MVP엔 취소 기능 없음)
+`status`: `PENDING`(결제 처리 중) → `ACTIVE`(예매 확정) → `CANCELLED`(취소)
 `course.category`는 위와 동일하게 원본 enum 값. `course.instructorName`, `course.thumbnail`은 항상 `null` —
 백엔드에 해당 데이터가 없으므로 화면에서 표시하지 말 것.
+
+### DELETE /api/enrollments/{id} — 예매 취소
+인증 필요. 본인 예매만 취소 가능. 취소하면 결제도 같이 취소 처리됨(모의 결제라 실제
+환불 없이 상태만 바뀜), 확정(ACTIVE) 상태였던 예매면 공연의 누적 예매 수도 같이 줄어듦.
+
+Response (200)
+```json
+{ "success": true, "message": "성공", "data": null }
+```
+
+본인 소유가 아닌 예매를 취소하려는 경우 (403)
+```json
+{ "success": false, "message": "본인의 예매만 취소할 수 있습니다", "data": null }
+```
+
+이미 취소된 예매를 다시 취소하려는 경우 (400)
+```json
+{ "success": false, "message": "이미 취소된 예매입니다", "data": null }
+```
+
+존재하지 않는 예매 (400)
+```json
+{ "success": false, "message": "예매 정보를 찾을 수 없습니다: 9999", "data": null }
+```
 
 ---
 
@@ -175,6 +199,8 @@ Response (200)
   { "paymentId": 1, "userId": 4, "courseId": 1, "amount": 55000.00,
     "status": "COMPLETED", "transactionId": "b22493d1-...", "createdAt": "..." } ] }
 ```
+`status`에 이제 `CANCELLED`도 나올 수 있음 — 예매를 취소하면 그 예매에 연결된 결제도
+같이 `CANCELLED`로 바뀜(`DELETE /api/enrollments/{id}` 참고).
 
 ---
 
