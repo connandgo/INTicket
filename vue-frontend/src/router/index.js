@@ -37,6 +37,13 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    // AI 수요 분석 (Sprint2, B2B) — 공연기획사만
+    path: '/courses/:id(\\d+)/insights',
+    name: 'DemandInsight',
+    component: () => import('@/views/DemandInsightView.vue'),
+    meta: { requiresAuth: true, plannerOnly: true }
+  },
+  {
     // UI-005 내 예매
     path: '/enrollments',
     name: 'Enrollment',

@@ -24,6 +24,11 @@
   --line:      #E4E7EB;
   --line-dark: #CDD2D9;
 
+  /* AI 기능 전용 강조색. 예매 흐름의 빨강과 구분해 '분석' 영역임을 드러낸다. */
+  --ai:      #6D4AE0;
+  --ai-wash: #F1EDFD;
+  --ai-line: #DCD2F8;
+
   --ok:      #147A4B;
   --ok-wash: #E8F6EE;
   --warn:      #A8620A;
@@ -148,6 +153,8 @@ ul, ol { list-style: none; }
 .bdg-ok    { background: var(--ok-wash);   color: var(--ok);       border-color: #C9E7D7; }
 .bdg-warn  { background: var(--warn-wash); color: var(--warn);     border-color: #F0DDBB; }
 .bdg-gray  { background: var(--bg-dim);    color: var(--t2);       border-color: var(--line); }
+.bdg-ai    { background: var(--ai-wash);   color: var(--ai);       border-color: var(--ai-line); }
+.bdg-ai-solid { background: var(--ai); color: #fff; }
 .bdg-solid { background: var(--navy);      color: #fff; }
 
 /* ---------- 탭 ---------- */

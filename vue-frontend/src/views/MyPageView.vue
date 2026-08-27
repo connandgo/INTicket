@@ -29,7 +29,7 @@
         <table v-else class="tbl">
           <thead>
             <tr>
-              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th>
+              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">AI 분석</th>
             </tr>
           </thead>
           <tbody>
@@ -42,6 +42,11 @@
                 <span class="bdg" :class="c.status === 'ACTIVE' ? 'bdg-ok' : 'bdg-gray'">
                   {{ c.status === 'ACTIVE' ? '예매 가능' : '예매 중지' }}
                 </span>
+              </td>
+              <td class="r">
+                <router-link :to="`/courses/${c.id}/insights`" class="btn btn-line btn-sm ai-go">
+                  수요 분석
+                </router-link>
               </td>
             </tr>
           </tbody>
@@ -284,6 +289,8 @@ onMounted(async () => {
 .tbl th { background: var(--bg-soft); font-weight: 600; color: var(--t2); font-size: 12.5px; }
 .tbl .r { text-align: right; }
 .lk { font-weight: 600; }
+.ai-go { border-color: var(--ai-line); color: var(--ai); }
+.ai-go:hover { border-color: var(--ai); background: var(--ai-wash); }
 .lk:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 760px) {
