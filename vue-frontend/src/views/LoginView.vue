@@ -20,7 +20,7 @@
         <!-- 데모 모드: 백엔드 없이 계정만 골라 들어간다 -->
         <template v-if="DEMO">
           <p class="alert alert-info">
-            데모 모드입니다. 백엔드 없이 화면만 돌아가며, 비밀번호를 확인하지 않습니다.
+            원하는 역할의 계정을 선택해 바로 둘러보세요.
           </p>
           <p v-if="auth.isAuthenticated" class="alert alert-ok">
             지금 <b>{{ auth.user?.name }}</b>({{ auth.user?.role === 'INSTRUCTOR' ? '공연기획사' : '관람객' }})으로

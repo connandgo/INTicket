@@ -78,8 +78,11 @@ export function getPerformance(course) {
   const key = String(course.id)
   if (!db[key]) {
     db[key] = seedFor(course)
-    save(db)
   }
+  // 예전 브라우저 저장값도 현재 좌석 배치도와 맞춘다.
+  // 좌석 그림의 칸 수와 잔여 숫자가 달라지는 현상을 여기서 한 번에 보정한다.
+  normalizePerformance(db[key])
+  save(db)
   return db[key]
 }
 
@@ -89,7 +92,23 @@ export function getRound(course, roundId) {
 }
 
 export function remaining(g) {
-  return Math.max(0, g.capacity - g.sold)
+  const visualCapacity = Object.values(g.rows || {}).reduce((a, n) => a + (Number(n) || 0), 0)
+  const capacity = visualCapacity || Number(g.capacity) || 0
+  return Math.max(0, capacity - (Number(g.sold) || 0))
+}
+
+function normalizePerformance(performance) {
+  for (const round of performance?.rounds || []) {
+    for (const grade of round.grades || []) {
+      const preset = SEAT_GRADES[grade.grade]
+      if (!preset) continue
+      const capacity = capacityOf(grade.grade)
+      grade.price = preset.price
+      grade.rows = preset.rows
+      grade.capacity = capacity
+      grade.sold = Math.min(capacity, Math.max(0, Number(grade.sold) || 0))
+    }
+  }
 }
 
 // 기획사가 회차를 직접 추가할 때

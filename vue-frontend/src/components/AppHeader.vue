@@ -5,10 +5,10 @@
       <div class="wrap util-in">
         <!-- 데모 모드일 때만. 진짜 서버에 붙은 화면과 헷갈리지 않게 항상 띄운다. -->
         <span v-if="DEMO" class="demo">
-          <b>데모 모드</b>
+          <b>체험하기</b>
           <button class="dbtn" @click="switchAccount">계정 전환</button>
-          <button class="dbtn" @click="resetDemo">데이터 초기화</button>
-          <button class="dbtn" @click="setDemo(false)">끄기</button>
+          <button class="dbtn" @click="resetDemo">처음부터</button>
+          <button class="dbtn" @click="setDemo(false)">체험 종료</button>
         </span>
 
         <template v-if="auth.isAuthenticated">
