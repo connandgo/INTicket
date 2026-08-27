@@ -141,6 +141,7 @@ import SeatMap from '@/components/SeatMap.vue'
 import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { bookingApi, isDuplicate } from '@/api/booking.js'
+import { isSoldOutError } from '@/domain/soldout.js'
 import { genreLabel } from '@/domain/genre.js'
 import { HOLD_MINUTES } from '@/config/features.js'
 
@@ -269,7 +270,11 @@ async function doPay() {
     step.value = 3
   } catch (e) {
     console.error('[booking] 결제 실패:', e)
-    if (isDuplicate(e)) {
+    if (isSoldOutError(e)) {
+      // 결제 직전에 남이 채운 경우. 선점분을 돌려놓고 대기 등록을 안내한다.
+      err.value = '방금 매진되었습니다. 공연 상세에서 취소표 대기를 걸어두시면 자리가 났을 때 자동으로 예매됩니다.'
+      backToPick()
+    } else if (isDuplicate(e)) {
       // 선점분을 돌려놓고 1단계로 되돌린다.
       // held를 비우지 않으면 사용자가 '선점 취소'를 눌렀을 때 같은 수량이
       // 두 번 복구되어 잔여 수량이 부풀어 오른다.

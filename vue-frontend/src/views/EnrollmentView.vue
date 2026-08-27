@@ -73,6 +73,25 @@
 
         <p v-if="cancelErr" class="alert alert-err">{{ cancelErr }}</p>
 
+        <!-- 취소표 대기 (Sprint2) -->
+        <section v-if="wait.items.length" class="wsec">
+          <h2 class="stitle">취소표 대기</h2>
+          <p v-if="wait.hasWaiting" class="alert alert-info wnote">
+            자리가 나면 대기 순서대로 <b>자동으로 예매·결제까지</b> 처리됩니다.
+            이 화면을 열어두시면 {{ POLL_SEC }}초마다 확인합니다.
+            <button class="refresh" @click="wait.fetchMine()">지금 확인</button>
+          </p>
+
+          <ul class="wrows">
+            <li v-for="w in wait.items" :key="w.id" class="wrow">
+              <span class="bdg" :class="WAIT_STYLE[w.status]">{{ WAIT_LABEL[w.status] }}</span>
+              <router-link :to="`/courses/${w.courseId}`" class="wttl">{{ courseTitle(w.courseId) }}</router-link>
+              <span class="wat num">{{ fmt(w.createdAt) }} 등록</span>
+              <span v-if="w.status === 'MATCHED'" class="wdone">자동 예매 완료 — 위 목록에서 확인하세요</span>
+            </li>
+          </ul>
+        </section>
+
         <p class="foot-note small muted">
           취소하면 결제도 함께 취소되고 좌석이 다시 풀립니다. 실제 환불 트랜잭션은 발생하지 않는 모의 결제입니다.
         </p>
@@ -82,14 +101,24 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
+import { useWaitlistStore, WAIT_LABEL, WAIT_STYLE } from '@/store/waitlist.js'
+import { useCourseStore } from '@/store/course.js'
 import { bookingApi } from '@/api/booking.js'
 import { genreLabel } from '@/domain/genre.js'
 
 const store = useEnrollmentStore()
+const wait = useWaitlistStore()
+const courses = useCourseStore()
+const POLL_SEC = 15
+
+// 대기 응답에는 courseId 만 온다. 공연명은 목록에서 찾아 붙인다.
+function courseTitle(id) {
+  return courses.courses.find((c) => c.id === Number(id))?.title || `공연 #${id}`
+}
 const hasPending = computed(() => store.items.some((e) => e.status === 'PENDING'))
 
 const confirming = ref(null)   // 취소 확인을 기다리는 예매 id
@@ -113,7 +142,15 @@ async function doCancel(e) {
   }
 }
 
+onBeforeUnmount(() => wait.stopPolling())
+
 onMounted(async () => {
+  await wait.fetchMine()
+  // 대기 목록에 공연명을 붙이려면 공연 목록이 필요하다.
+  if (wait.items.length && !courses.courses.length) courses.fetchCourses()
+  // 서버가 매칭을 먼저 알려주지 않으므로 대기 중일 때만 주기적으로 다시 읽는다.
+  wait.startPolling(() => store.fetchMine(), POLL_SEC * 1000)
+
   await store.fetchMine()
   // 모의 결제가 곧바로 끝나므로 PENDING이 남아 있으면 잠깐 뒤 한 번 더 읽는다.
   if (store.items.some((e) => e.status === 'PENDING')) {
@@ -168,6 +205,23 @@ function fmt(iso) {
 .confirm { display: inline-flex; align-items: center; gap: 6px; }
 .c-q { font-size: 12px; color: var(--t2); }
 .rprice { font-size: 14px; font-weight: 700; }
+
+.wsec { margin-top: 40px; }
+.wnote { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.wnote b { font-weight: 700; }
+.wrows { border-top: 2px solid var(--navy); }
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.wttl { font-size: 14px; font-weight: 700; }
+.wttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
+.wat { font-size: 12px; color: var(--t3); }
+.wdone { font-size: 12px; color: var(--ok); font-weight: 600; margin-left: auto; }
 
 .foot-note { margin-top: 16px; }
 

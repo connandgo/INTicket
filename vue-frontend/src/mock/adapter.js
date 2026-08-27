@@ -33,6 +33,33 @@ function currentUser(config) {
   }
 }
 
+// capacity 가 null 이면 무제한, 숫자면 enrollmentCount 가 그 값 이상일 때 매진
+function soldOut(course) {
+  if (course.capacity == null) return false
+  return Number(course.enrollmentCount || 0) >= Number(course.capacity)
+}
+
+// 자리가 하나 났을 때 가장 먼저 대기한 사람을 자동으로 예매시킨다.
+function autoMatch(db, courseId) {
+  const next = db.waitlist
+    .filter((w) => w.courseId === courseId && w.status === 'WAITING')
+    .sort((a, b) => a.id - b.id)[0]
+  if (!next) return
+  const course = db.courses.find((c) => c.id === courseId)
+  if (!course) return
+
+  next.status = 'MATCHED'
+  db.enrollments.push({
+    id: nextId(db, 'enrollment'),
+    userId: next.userId,
+    courseId,
+    status: 'ACTIVE',       // 자동 결제까지 끝난 상태로 들어온다
+    createdAt: new Date().toISOString(),
+    course: null
+  })
+  course.enrollmentCount += 1
+}
+
 export default async function mockAdapter(config) {
   await delay()
 
@@ -79,6 +106,7 @@ export default async function mockAdapter(config) {
       description: body.description ?? null,
       category: body.category,
       price: Number(body.price),
+      capacity: body.capacity == null ? null : Number(body.capacity),
       instructorId: me.id,
       enrollmentCount: 0,
       status: 'ACTIVE',
@@ -111,6 +139,10 @@ export default async function mockAdapter(config) {
       (e) => e.userId === me.id && e.courseId === course.id && e.status !== 'CANCELLED'
     )
     if (dup) return fail(config, '이미 수강신청한 강의입니다')
+
+    if (soldOut(course)) {
+      return fail(config, '매진된 공연입니다. 취소표 대기 등록을 이용해 주세요')
+    }
 
     const e = {
       id: nextId(db, 'enrollment'),
@@ -174,8 +206,44 @@ export default async function mockAdapter(config) {
       if (c) c.enrollmentCount = Math.max(0, c.enrollmentCount - 1)
     }
     e.status = 'CANCELLED'
+
+    // 자리가 났으니 대기 순서대로 한 명을 자동 예매·결제 처리한다.
+    // 서버가 하는 일을 그대로 흉내낸 것이다(API_SPEC 3절).
+    autoMatch(db, e.courseId)
+
     write(db)
     return ok(config, null)
+  }
+
+  /* ---------- 취소표 대기 ---------- */
+  if (url === '/api/enrollments/waitlist' && method === 'post') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    const course = db.courses.find((c) => c.id === Number(body.courseId))
+    if (!course) return fail(config, `존재하지 않는 강의입니다: ${body.courseId}`)
+    if (!soldOut(course)) return fail(config, '매진되지 않은 공연입니다. 바로 예매해 주세요')
+
+    if (db.waitlist.find((w) => w.userId === me.id && w.courseId === course.id)) {
+      return fail(config, '이미 대기 등록한 공연입니다')
+    }
+    if (db.enrollments.find((e) => e.userId === me.id && e.courseId === course.id && e.status !== 'CANCELLED')) {
+      return fail(config, '이미 예매한 공연입니다')
+    }
+
+    const w = {
+      id: nextId(db, 'waitlist'),
+      userId: me.id,
+      courseId: course.id,
+      status: 'WAITING',
+      createdAt: new Date().toISOString()
+    }
+    db.waitlist.push(w)
+    write(db)
+    return ok(config, w, 201)
+  }
+
+  if (url === '/api/enrollments/waitlist/my' && method === 'get') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    return ok(config, db.waitlist.filter((w) => w.userId === me.id).sort((a, b) => b.id - a.id))
   }
 
   /* ---------- 추천 (FastAPI, 래퍼 없음) ---------- */
