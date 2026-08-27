@@ -44,6 +44,10 @@ public class Course {
     @Builder.Default
     private Integer enrollmentCount = 0;
 
+    // 정원 (null이면 무제한 - 기존에 등록된 강의와의 하위 호환을 위해 nullable)
+    @Column
+    private Integer capacity;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -72,5 +76,10 @@ public class Course {
         if (this.enrollmentCount > 0) {
             this.enrollmentCount--;
         }
+    }
+
+    // capacity가 null이면 무제한이라 매진 자체가 없음
+    public boolean isFull() {
+        return capacity != null && enrollmentCount >= capacity;
     }
 }
