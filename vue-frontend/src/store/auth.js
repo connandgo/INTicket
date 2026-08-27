@@ -101,7 +101,9 @@ export const useAuthStore = defineStore('auth', () => {
       id_token_hint: hint,
       post_logout_redirect_uri: POST_LOGOUT_URI
     })
-    window.location.href = `${AUTH_SERVER_URL}/connect/logout?${params.toString()}`
+    // 게이트웨이(:8080)에는 /connect/** 라우트가 없어 401 이 난다.
+    // vite 프록시(/connect → :9000)를 타도록 상대경로로 보낸다.
+    window.location.href = `/connect/logout?${params.toString()}`
   }
 
   // OAuth2 Authorization Code Flow
