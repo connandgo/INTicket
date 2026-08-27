@@ -1,13 +1,3 @@
-# The following practice code is intended for educational purposes only.
-# For contact: audit@korea.ac.kr, Sungryel Lim Ph.D
-#
-# Student runtime version (ARM64)
-# - Uses prebuilt Docker images only
-# - Does not execute Dockerfile/Gradle builds
-# - Load the distributed image archive before starting:
-#     docker load -i msa-lecture-images-arm64.tar
-# - Start with:
-#     docker compose -f docker-compose.student-arm64.yml up -d --pull never
 
 services:
 
@@ -15,7 +5,6 @@ services:
 
   mariadb:
     image: mariadb:11.2
-    platform: linux/arm64/v8
     container_name: lecturedb
     environment:
       MYSQL_ROOT_PASSWORD: SqlDba-1
@@ -38,7 +27,6 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.7.0
-    platform: linux/arm64
     container_name: lecture-kafka
     environment:
       KAFKA_NODE_ID: 1
@@ -66,11 +54,13 @@ services:
     networks:
       - lecture-net
 
+
   # Service Discovery
 
   eureka-server:
-    image: msa-lecture-eureka-server:latest
-    platform: linux/arm64
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
     container_name: lecture-eureka
     ports:
       - "8761:8761"
@@ -85,11 +75,11 @@ services:
     networks:
       - lecture-net
 
+
   # Auth Server
 
   auth-server:
     image: msa-lecture/auth-server:1.0
-    platform: linux/arm64
     container_name: lecture-auth
     ports:
       - "9000:9000"
@@ -113,11 +103,11 @@ services:
     networks:
       - lecture-net
 
+
   # API Gateway
 
   api-gateway:
     image: msa-lecture/api-gateway:1.0
-    platform: linux/arm64
     container_name: lecture-gateway
     ports:
       - "8080:8080"
@@ -134,11 +124,13 @@ services:
     networks:
       - lecture-net
 
+
   # Microservices
 
   user-service:
-    image: msa-lecture-user-service:latest
-    platform: linux/arm64
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
     container_name: lecture-user
     ports:
       - "8081:8081"
@@ -161,8 +153,9 @@ services:
       - lecture-net
 
   course-service:
-    image: msa-lecture-course-service:latest
-    platform: linux/arm64
+    build:
+      context: ./course-service
+      dockerfile: Dockerfile
     container_name: lecture-course
     ports:
       - "8082:8082"
@@ -185,8 +178,9 @@ services:
       - lecture-net
 
   enrollment-service:
-    image: msa-lecture-enrollment-service:latest
-    platform: linux/arm64
+    build:
+      context: ./enrollment-service
+      dockerfile: Dockerfile
     container_name: lecture-enrollment
     ports:
       - "8083:8083"
@@ -212,8 +206,9 @@ services:
       - lecture-net
 
   payment-service:
-    image: msa-lecture-payment-service:latest
-    platform: linux/arm64
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
     container_name: lecture-payment
     ports:
       - "8084:8084"
@@ -239,8 +234,9 @@ services:
       - lecture-net
 
   recommend-service:
-    image: msa-lecture-recommend-service:latest
-    platform: linux/arm64
+    build:
+      context: ./recommend-service
+      dockerfile: Dockerfile
     container_name: lecture-recommend
     ports:
       - "8085:8085"
@@ -252,6 +248,13 @@ services:
       - ENROLLMENT_SERVICE_URL=http://enrollment-service:8083
       - COURSE_SERVICE_URL=http://course-service:8082
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      # AI 취소표 매칭용 LLM 설정.
+      # 키는 파일에 적지 않고 호스트 환경변수에서 읽는다.
+      #   export LLM_API_KEY=... 후 docker compose up
+      # 값을 주지 않으면 llm_api_key 가 비어 자동으로 폴백 경로로 동작한다.
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_ENABLED=${LLM_ENABLED:-true}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -265,6 +268,22 @@ services:
         condition: service_started
     networks:
       - lecture-net
+
+  frontend:
+    build:
+      context: ./vue-frontend
+      dockerfile: Dockerfile
+    container_name: lecture-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      - lecture-net
+
+
+# Volumes & Networks
 
 volumes:
   mariadb_data:
