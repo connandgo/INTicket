@@ -41,15 +41,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function logout(redirect = true) {
+  // 이 앱 안의 세션만 지운다. 인증 서버 세션은 그대로 남는다.
+  function clearSession() {
     accessToken.value = null
     user.value = null
     sessionStorage.removeItem('access_token')
     sessionStorage.removeItem('user')
+  }
 
-    if (redirect) {
-      window.location.href = '/login'
-    }
+  function logout(redirect = true) {
+    clearSession()
+    if (redirect) window.location.href = '/login'
+  }
+
+  // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
+  //
+  // 이걸 안 하면 우리 앱에서 로그아웃해도 :8080 의 로그인 세션이 남아 있어서,
+  // 다음에 '로그인'을 눌렀을 때 아이디·비밀번호를 묻지 않고 곧바로 통과해 버린다.
+  // 계정을 바꿔 가며 테스트할 수가 없다.
+  function fullLogout() {
+    clearSession()
+    window.location.href = `${AUTH_SERVER_URL}/logout`
   }
 
   // 데모 모드 로그인 — auth-server 없이 계정만 골라 들어간다.
@@ -73,7 +85,10 @@ export const useAuthStore = defineStore('auth', () => {
       client_id: import.meta.env.VITE_CLIENT_ID,
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
       // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
-      scope: 'openid'
+      scope: 'openid',
+      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터.
+      // 인증 서버가 무시할 수도 있어서, 확실한 건 fullLogout() 쪽이다.
+      prompt: 'login'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`
@@ -96,6 +111,8 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     demoLogin,
     demoUsers,
+    clearSession,
+    fullLogout,
     accessToken,
     user,
     isAuthenticated,
