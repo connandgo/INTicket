@@ -79,9 +79,13 @@
 
               <template v-else>
                 <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
-                <button class="btn btn-red btn-wide" :disabled="waiting" @click="joinWaitlist">
+                <router-link v-if="firstRoundId" :to="`/courses/${c.id}/seat-wish?round=${firstRoundId}`"
+                             class="btn btn-ai btn-wide">
+                  ✦ AI에게 원하는 자리 말하기
+                </router-link>
+                <button class="btn btn-line btn-wide" :disabled="waiting" @click="joinWaitlist">
                   <span v-if="waiting" class="spin spin-w"></span>
-                  {{ waiting ? '등록 중' : '취소표 대기 등록' }}
+                  {{ waiting ? '등록 중' : '조건 없이 대기만 걸기' }}
                 </button>
               </template>
             </section>
@@ -136,11 +140,12 @@
                 to="/login"
                 class="btn btn-line btn-sm rd-go"
               >로그인 후 예매</router-link>
-              <router-link
-                v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'"
-                :to="`/courses/${c.id}/booking?round=${r.id}`"
-                class="btn btn-red btn-sm rd-go"
-              >예매하기</router-link>
+              <span v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'" class="rd-go rd-two">
+                <router-link :to="`/courses/${c.id}/seat-wish?round=${r.id}`"
+                             class="btn btn-line btn-sm ai-b" title="AI 좌석 매칭">✦ AI</router-link>
+                <router-link :to="`/courses/${c.id}/booking?round=${r.id}`"
+                             class="btn btn-red btn-sm">예매하기</router-link>
+              </span>
               <span v-else-if="totalLeft(r) === 0" class="bdg bdg-gray rd-go">전 등급 매진</span>
               <span v-else class="rd-go small muted">예매 불가</span>
             </li>
@@ -220,6 +225,7 @@ async function joinWaitlist() {
 const rounds = ref([])
 const loadingRounds = ref(false)
 const scheduleFromServer = FEATURES.scheduleApi
+const firstRoundId = computed(() => rounds.value[0]?.id ?? null)
 
 function totalLeft(r) {
   return r.grades.reduce((a, g) => a + remaining(g), 0)
@@ -304,6 +310,11 @@ onMounted(async () => {
 .gr-r { font-size: 11.5px; color: var(--t3); }
 .gr-r.few { color: var(--red); font-weight: 700; }
 .rd-go { justify-self: end; }
+.rd-two { display: inline-flex; gap: 6px; }
+.ai-b { border-color: var(--ai-line); color: var(--ai); }
+.ai-b:hover { border-color: var(--ai); background: var(--ai-wash); }
+.btn-ai { background: var(--ai); color: #fff; border-color: var(--ai); }
+.btn-ai:hover:not(:disabled) { background: #5A38CC; border-color: #5A38CC; }
 
 .desc { font-size: 14.5px; line-height: 1.85; color: var(--t2); white-space: pre-wrap; }
 .notice { display: flex; flex-direction: column; gap: 7px; }

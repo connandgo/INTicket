@@ -82,27 +82,42 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
-  // 게이트웨이(:8080)에는 /connect/** 라우트가 없어서 거기로 부르면 401 이 난다.
-  // 그래서 vite 프록시를 통해 인증 서버(:9000)의 /connect/logout 으로 직접 보낸다.
-  // 같은 출처로 나가므로 세션 쿠키가 함께 실린다(쿠키는 포트를 구분하지 않음).
+  // 인증 서버의 /connect/logout 이 세션을 확실히 끊어 주는지 확인할 수 없었고,
+  // 세션 쿠키(JSESSIONID)는 HttpOnly 라 브라우저 JS 로도 못 지운다.
   //
-  // id_token_hint 가 있어야 인증 서버가 누구를 로그아웃할지 알고,
-  // post_logout_redirect_uri 로 우리 앱에 되돌려 보내 준다(클라이언트에 등록된 값).
-  function fullLogout() {
+  // 다행히 그 쿠키는 Domain 없이 host(localhost)에 심겨서 포트가 달라도
+  // 우리 dev 서버로 함께 전송된다. 그래서 dev 서버가 만료 헤더를 내려주는
+  // /kill-session 을 불러 브라우저가 쿠키를 지우게 한다(vite.config.js 참고).
+  //
+  // 그다음 표준 OIDC 로그아웃도 함께 호출해 서버 쪽 세션도 정리한다.
+  async function fullLogout() {
     const hint = idToken.value
     clearSession()
 
-    if (!hint) {
-      // id_token 이 없는 예전 세션. 되돌아올 수는 없어도 세션은 끊는다.
-      window.location.href = `${AUTH_SERVER_URL}/logout`
-      return
+    // 1) 브라우저가 들고 있는 인증 서버 세션 쿠키를 지운다 (확실한 쪽)
+    try {
+      await fetch('/kill-session', { credentials: 'include', cache: 'no-store' })
+    } catch (e) {
+      console.warn('[auth] 세션 쿠키 삭제 실패:', e)
     }
 
-    const params = new URLSearchParams({
-      id_token_hint: hint,
-      post_logout_redirect_uri: POST_LOGOUT_URI
-    })
-    window.location.href = `/connect/logout?${params.toString()}`
+    // 2) 서버 쪽 세션도 정리한다. 실패해도 1) 만으로 재로그인 시 폼이 뜬다.
+    if (hint) {
+      const params = new URLSearchParams({
+        id_token_hint: hint,
+        post_logout_redirect_uri: POST_LOGOUT_URI
+      })
+      try {
+        await fetch(`/connect/logout?${params.toString()}`, {
+          credentials: 'include',
+          redirect: 'manual'
+        })
+      } catch (e) {
+        console.warn('[auth] OIDC 로그아웃 호출 실패:', e)
+      }
+    }
+
+    window.location.href = '/'
   }
 
   // OAuth2 Authorization Code Flow
@@ -113,9 +128,16 @@ export const useAuthStore = defineStore('auth', () => {
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
       // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
       scope: 'openid',
-      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터.
-      // 인증 서버가 무시할 수도 있어서, 확실한 건 fullLogout() 쪽이다.
-      prompt: 'login'
+      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터 두 개.
+      //
+      // prompt=login : 재인증을 요청한다. 서버가 무시할 수 있다.
+      // max_age=0    : 마지막 인증 이후 0초를 넘겼으면 다시 인증하라는 뜻.
+      //                항상 초과이므로 사실상 '매번 로그인 폼을 띄워라'가 된다.
+      //
+      // 인증 서버 세션을 끊는 데 의존하지 않으려고 붙였다. 로그아웃이 세션을
+      // 못 끊어도 이 파라미터 때문에 아이디·비밀번호를 다시 묻는다.
+      prompt: 'login',
+      max_age: '0'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`
