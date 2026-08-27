@@ -26,6 +26,7 @@ public class EnrollmentService {
     private final PaymentServiceClient paymentServiceClient;
     private final EnrollmentKafkaProducer kafkaProducer;
     private final EnrollmentWriteService enrollmentWriteService;
+    private final WaitlistService waitlistService;
 
     /**
      * 수강신청 전체 흐름
@@ -43,10 +44,15 @@ public class EnrollmentService {
             throw new IllegalArgumentException("이미 수강신청한 강의입니다");
         }
 
-        Enrollment enrollment = enrollmentWriteService.createPendingEnrollment(userId, courseId);
-
         // 원래 99,000원으로 고정 하드코딩되어 있던 부분 - Course.price(공연 가격)를 그대로 결제 요청에 반영
         Map<String, Object> course = courseServiceClient.getCourse(courseId);
+
+        if (isFull(course)) {
+            throw new IllegalArgumentException("매진된 공연입니다. 취소표 대기 등록을 이용해 주세요");
+        }
+
+        Enrollment enrollment = enrollmentWriteService.createPendingEnrollment(userId, courseId);
+
         BigDecimal price = toBigDecimal(course.get("price"));
         paymentServiceClient.requestPayment(userId, courseId, price);
 
@@ -82,6 +88,59 @@ public class EnrollmentService {
         );
 
         log.info("[EnrollmentService] 수강 활성화 완료 - enrollmentId: {}", enrollment.getId());
+    }
+
+    /**
+     * 예매 취소
+     * - 본인 예매만 취소 가능
+     * - ACTIVE였던 경우에만 수강생 수 감소(PENDING이었으면 애초에 증가된 적 없음)
+     * - 결제도 함께 취소(모의 결제라 상태만 CANCELLED로 변경, 실제 환불 트랜잭션 없음)
+     */
+    @Transactional
+    public void cancelEnrollment(Long userId, Long enrollmentId) {
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "예매 정보를 찾을 수 없습니다: " + enrollmentId));
+
+        if (!enrollment.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "본인의 예매만 취소할 수 있습니다");
+        }
+
+        if (enrollment.getStatus() == Enrollment.Status.CANCELLED) {
+            throw new IllegalArgumentException("이미 취소된 예매입니다");
+        }
+
+        boolean wasActive = enrollment.getStatus() == Enrollment.Status.ACTIVE;
+
+        enrollment.cancel();
+
+        if (wasActive) {
+            courseServiceClient.decreaseEnrollmentCount(enrollment.getCourseId());
+            tryMatchWaitlist(enrollment.getCourseId());
+        }
+
+        paymentServiceClient.cancelPayment(userId, enrollment.getCourseId());
+
+        log.info("[EnrollmentService] 예매 취소 완료 - enrollmentId: {}", enrollment.getId());
+    }
+
+    /**
+     * 취소로 자리가 났을 때 가장 먼저 등록한 대기자를 자동으로 예매시킨다.
+     * 매칭 실패해도 취소 자체는 이미 처리된 상태이므로 예외를 밖으로 던지지 않는다.
+     */
+    private void tryMatchWaitlist(Long courseId) {
+        waitlistService.findNextWaiting(courseId).ifPresent(waiting -> {
+            try {
+                enroll(waiting.getUserId(), courseId);
+                waitlistService.markMatched(waiting.getId());
+                log.info("[EnrollmentService] 취소표 매칭 완료 - waitlistId: {}, userId: {}, courseId: {}",
+                        waiting.getId(), waiting.getUserId(), courseId);
+            } catch (Exception e) {
+                log.error("[EnrollmentService] 취소표 매칭 실패 - waitlistId: {}, error: {}",
+                        waiting.getId(), e.getMessage());
+            }
+        });
     }
 
     /**
@@ -150,6 +209,16 @@ public class EnrollmentService {
     //         default -> category;
     //     };
     // }
+
+    private boolean isFull(Map<String, Object> course) {
+        Object capacityValue = course.get("capacity");
+        if (capacityValue == null) {
+            return false; // 정원 무제한
+        }
+        int capacity = ((Number) capacityValue).intValue();
+        int enrollmentCount = ((Number) course.get("enrollmentCount")).intValue();
+        return enrollmentCount >= capacity;
+    }
 
     private Long toLong(Object value) {
         if (value == null) return null;

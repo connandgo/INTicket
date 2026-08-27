@@ -28,6 +28,7 @@ public class CourseService {
                 .category(request.getCategory())
                 .price(request.getPrice())
                 .instructorId(instructorId)
+                .capacity(request.getCapacity())
                 .build();
 
         return CourseDto.CourseResponse.from(courseRepository.save(course));
@@ -73,6 +74,15 @@ public class CourseService {
     public void increaseEnrollmentCount(Long courseId) {
         Course course = findCourseById(courseId);
         course.increaseEnrollmentCount();
+    }
+
+    /**
+     * 수강생 수 감소 (Enrollment Service 예매 취소 시 호출)
+     */
+    @Transactional
+    public void decreaseEnrollmentCount(Long courseId) {
+        Course course = findCourseById(courseId);
+        course.decreaseEnrollmentCount();
     }
 
     /**

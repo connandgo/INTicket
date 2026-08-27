@@ -62,4 +62,8 @@ public class Payment {
     public void fail() {
         this.status = Status.FAILED;
     }
+
+    public void cancel() {
+        this.status = Status.CANCELLED;
+    }
 }

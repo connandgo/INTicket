@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth.js'
+import { DEMO } from '@/config/features.js'
+import { read as readDemoDb } from '@/mock/db.js'
 
 const AUTH_SERVER_URL = import.meta.env.VITE_AUTH_SERVER_URL || 'http://localhost:8080'
 
@@ -39,15 +41,52 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function logout(redirect = true) {
+  // 이 앱 안의 세션만 지운다. 인증 서버 세션은 그대로 남는다.
+  function clearSession() {
     accessToken.value = null
     user.value = null
     sessionStorage.removeItem('access_token')
     sessionStorage.removeItem('user')
+  }
 
-    if (redirect) {
-      window.location.href = '/login'
+  function logout(redirect = true) {
+    clearSession()
+    if (redirect) window.location.href = '/login'
+  }
+
+  // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
+  //
+  // 이걸 안 하면 우리 앱에서 로그아웃해도 :8080 의 로그인 세션이 남아 있어서,
+  // 다음에 '로그인'을 눌렀을 때 아이디·비밀번호를 묻지 않고 곧바로 통과해 버린다.
+  //
+  // 브라우저를 :8080 으로 보내면 인증 서버 로그인 페이지에 사용자가 남겨지므로,
+  // 같은 출처로 프록시된 /auth-logout 을 조용히 호출하고 화면은 우리 앱에 둔다.
+  // 쿠키는 포트를 구분하지 않아 :8080 이 심은 세션 쿠키가 함께 전달된다.
+  async function fullLogout() {
+    clearSession()
+    try {
+      await fetch('/auth-logout', { credentials: 'include', redirect: 'manual' })
+    } catch (e) {
+      // 프록시가 없는 환경(빌드 후 정적 배포 등)에서는 직접 부른다.
+      // 이 경우엔 인증 서버 페이지로 이동하게 된다.
+      console.warn('[auth] 조용한 로그아웃 실패, 인증 서버로 이동합니다:', e)
+      window.location.href = `${AUTH_SERVER_URL}/logout`
+      return
     }
+  }
+
+  // 데모 모드 로그인 — auth-server 없이 계정만 골라 들어간다.
+  // 비밀번호를 받지 않는다. 실제 인증이 아니라는 뜻이고, DEMO 일 때만 쓰인다.
+  function demoLogin(email) {
+    const user = readDemoDb().users.find((u) => u.email === email)
+    if (!user) throw new Error('데모 계정을 찾을 수 없습니다.')
+    setToken(`demo.${user.id}.${Date.now()}`)
+    setUser(user)
+    return user
+  }
+
+  function demoUsers() {
+    return DEMO ? readDemoDb().users : []
   }
 
   // OAuth2 Authorization Code Flow
@@ -56,7 +95,11 @@ export const useAuthStore = defineStore('auth', () => {
       response_type: 'code',
       client_id: import.meta.env.VITE_CLIENT_ID,
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
-      scope: 'openid profile read write'
+      // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
+      scope: 'openid',
+      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터.
+      // 인증 서버가 무시할 수도 있어서, 확실한 건 fullLogout() 쪽이다.
+      prompt: 'login'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`
@@ -77,6 +120,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
+    demoLogin,
+    demoUsers,
+    clearSession,
+    fullLogout,
     accessToken,
     user,
     isAuthenticated,

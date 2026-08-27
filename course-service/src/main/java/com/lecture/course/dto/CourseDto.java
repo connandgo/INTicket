@@ -30,6 +30,10 @@ public class CourseDto {
         @NotNull(message = "가격은 필수입니다")
         @PositiveOrZero(message = "가격은 0 이상이어야 합니다")
         private BigDecimal price;
+
+        // 정원 - 비워두면 무제한
+        @PositiveOrZero(message = "정원은 0 이상이어야 합니다")
+        private Integer capacity;
     }
 
     // 강의 응답
@@ -45,6 +49,7 @@ public class CourseDto {
         private BigDecimal price;
         private Long instructorId;
         private Integer enrollmentCount;
+        private Integer capacity;
         private Course.Status status;
         private LocalDateTime createdAt;
 
@@ -57,6 +62,7 @@ public class CourseDto {
                     .price(course.getPrice())
                     .instructorId(course.getInstructorId())
                     .enrollmentCount(course.getEnrollmentCount())
+                    .capacity(course.getCapacity())
                     .status(course.getStatus())
                     .createdAt(course.getCreatedAt())
                     .build();

@@ -76,18 +76,21 @@ INSTRUCTOR만 가능. STUDENT 시도 시 **403**.
 
 Request
 ```json
-{ "title": "TestConcert", "description": "desc", "category": "BACKEND", "price": 55000 }
+{ "title": "TestConcert", "description": "desc", "category": "BACKEND", "price": 55000, "capacity": 100 }
 ```
 `category`는 원본 enum 값 그대로 전송: `BACKEND | FRONTEND | DEVOPS | DATA_SCIENCE | MOBILE | SECURITY | DATABASE | OTHER`
 (화면에는 `genre.js`가 `BACKEND→뮤지컬, FRONTEND→연극, DEVOPS→콘서트, DATA_SCIENCE→클래식`으로 매핑, 나머지는 "기타")
+`capacity`는 선택값(생략 가능). 비워두면 정원 무제한 — 매진·취소표 대기 기능이 아예 동작 안 함.
 
 Response (201)
 ```json
 { "success": true, "message": "성공", "data": {
   "id": 1, "title": "TestConcert", "description": "desc", "category": "BACKEND",
-  "price": 55000, "instructorId": 3, "enrollmentCount": 0, "status": "ACTIVE",
+  "price": 55000, "instructorId": 3, "enrollmentCount": 0, "capacity": 100, "status": "ACTIVE",
   "createdAt": "2026-08-26T15:18:59.448254" } }
 ```
+`capacity`가 `null`이면 무제한, 숫자면 그게 정원. `enrollmentCount >= capacity`가 되면 매진 —
+이후 그 공연에는 예매 대신 `POST /api/enrollments/waitlist`(취소표 대기)만 가능해짐.
 
 STUDENT가 시도한 경우 (403)
 ```json
@@ -144,6 +147,11 @@ Response (201) — 응답은 `PENDING`이지만 결제가 워낙 빨리 끝나�
 { "success": false, "message": "존재하지 않는 강의입니다: 9999", "data": null }
 ```
 
+매진된 공연 (400) — capacity 있는 공연에서 enrollmentCount가 capacity 이상일 때
+```json
+{ "success": false, "message": "매진된 공연입니다. 취소표 대기 등록을 이용해 주세요", "data": null }
+```
+
 ### GET /api/enrollments/my — 내 예매 목록
 본인 것만 반환됨(다른 사용자 예매 안 보임, 검증됨).
 
@@ -157,9 +165,69 @@ Response (200)
       "price": 55000, "thumbnail": null, "instructorName": null, "enrollmentCount": 1
     } } ] }
 ```
-`status`: `PENDING`(결제 처리 중) → `ACTIVE`(예매 확정) → `CANCELLED`(취소, 이번 MVP엔 취소 기능 없음)
+`status`: `PENDING`(결제 처리 중) → `ACTIVE`(예매 확정) → `CANCELLED`(취소)
 `course.category`는 위와 동일하게 원본 enum 값. `course.instructorName`, `course.thumbnail`은 항상 `null` —
 백엔드에 해당 데이터가 없으므로 화면에서 표시하지 말 것.
+
+### DELETE /api/enrollments/{id} — 예매 취소
+인증 필요. 본인 예매만 취소 가능. 취소하면 결제도 같이 취소 처리됨(모의 결제라 실제
+환불 없이 상태만 바뀜), 확정(ACTIVE) 상태였던 예매면 공연의 누적 예매 수도 같이 줄어듦.
+
+Response (200)
+```json
+{ "success": true, "message": "성공", "data": null }
+```
+
+본인 소유가 아닌 예매를 취소하려는 경우 (403)
+```json
+{ "success": false, "message": "본인의 예매만 취소할 수 있습니다", "data": null }
+```
+
+이미 취소된 예매를 다시 취소하려는 경우 (400)
+```json
+{ "success": false, "message": "이미 취소된 예매입니다", "data": null }
+```
+
+존재하지 않는 예매 (400)
+```json
+{ "success": false, "message": "예매 정보를 찾을 수 없습니다: 9999", "data": null }
+```
+
+### POST /api/enrollments/waitlist — 취소표 대기 등록
+인증 필요. **매진된 공연에서만** 등록 가능(매진 아니면 400, 그냥 예매하라는 안내가 옴).
+이미 예매했거나 이미 대기 등록한 공연이면 중복 등록 안 됨.
+
+Request
+```json
+{ "courseId": 4 }
+```
+
+Response (201)
+```json
+{ "success": true, "message": "성공", "data": {
+  "id": 1, "userId": 5, "courseId": 4, "status": "WAITING",
+  "createdAt": "2026-08-27T00:20:05.734329" } }
+```
+
+매진 아닌 공연에 등록 시도 (400)
+```json
+{ "success": false, "message": "매진되지 않은 공연입니다. 바로 예매해 주세요", "data": null }
+```
+
+### GET /api/enrollments/waitlist/my — 내 취소표 대기 목록
+**실시간 알림(푸시) 없음.** 취소가 발생해서 자리가 나면 대기 등록 순서대로 자동으로
+예매·결제까지 처리되고, 이 값의 `status`가 `WAITING → MATCHED`로 바뀜. 화면은 이
+엔드포인트를 주기적으로 다시 호출(폴링)하거나 페이지 재방문 시 호출해서 확인하는
+방식으로 구현할 것 — 매칭됐다고 서버가 먼저 알려주지 않음.
+
+Response (200)
+```json
+{ "success": true, "message": "성공", "data": [
+  { "id": 1, "userId": 5, "courseId": 4, "status": "MATCHED",
+    "createdAt": "2026-08-27T00:20:05.734329" } ] }
+```
+`status: MATCHED`가 보이면 `GET /api/enrollments/my`에서 그 `courseId`로 새로 생긴
+예매(이미 결제까지 완료된 `ACTIVE` 상태)를 확인할 수 있음.
 
 ---
 
@@ -175,6 +243,8 @@ Response (200)
   { "paymentId": 1, "userId": 4, "courseId": 1, "amount": 55000.00,
     "status": "COMPLETED", "transactionId": "b22493d1-...", "createdAt": "..." } ] }
 ```
+`status`에 이제 `CANCELLED`도 나올 수 있음 — 예매를 취소하면 그 예매에 연결된 결제도
+같이 `CANCELLED`로 바뀜(`DELETE /api/enrollments/{id}` 참고).
 
 ---
 

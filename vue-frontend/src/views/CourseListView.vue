@@ -1,373 +1,129 @@
 <template>
-  <div class="page-wrapper">
+  <div>
     <AppHeader />
-    <div class="page-layout">
-      <!-- 사이드바 -->
-      <aside class="sidebar">
-        <div class="sidebar-section">
-          <div class="sidebar-label">메뉴</div>
 
-          <router-link
-            to="/courses"
-            class="sidebar-item"
-            :class="{ active: $route.path === '/courses' }"
-          >
-            <span class="si-icon">📚</span> 강의 목록
-          </router-link>
+    <main class="wrap page">
+      <h1 class="ptitle">
+        공연
+        <span class="cnt">{{ list.length }}건</span>
+      </h1>
 
-          <router-link
-            v-if="!isInstructor"
-            to="/enrollments"
-            class="sidebar-item"
-          >
-            <span class="si-icon">✅</span> 내 수강 목록
-          </router-link>
+      <!-- 장르 -->
+      <div class="tabs">
+        <button
+          v-for="t in GENRE_TABS"
+          :key="t.code"
+          class="tab"
+          :class="{ on: store.genre === t.code }"
+          @click="store.setGenre(t.code)"
+        >{{ t.label }}</button>
+      </div>
 
-          <router-link
-            to="/mypage"
-            class="sidebar-item"
-          >
-            <span class="si-icon">⭐</span> 마이페이지
-          </router-link>
+      <div class="search">
+        <input
+          v-model.trim="q"
+          class="inp"
+          type="search"
+          placeholder="공연명을 입력하세요"
+          aria-label="공연 검색"
+        />
+        <button v-if="q" class="clear" type="button" @click="q = ''" aria-label="검색어 지우기">✕</button>
+      </div>
+
+      <div class="bar">
+        <div class="sorts">
+          <button class="sort" :class="{ on: sort === 'pop' }" @click="sort = 'pop'">인기순</button>
+          <span class="sep">|</span>
+          <button class="sort" :class="{ on: sort === 'new' }" @click="sort = 'new'">최신순</button>
+          <span class="sep">|</span>
+          <button class="sort" :class="{ on: sort === 'low' }" @click="sort = 'low'">낮은 가격순</button>
         </div>
+        <router-link v-if="isPlanner" to="/courses/new" class="btn btn-line btn-sm">공연 등록</router-link>
+      </div>
 
-        <div class="sidebar-section">
-          <div class="sidebar-label">계정</div>
-          <router-link to="/mypage" class="sidebar-item">
-            <span class="si-icon">👤</span> 마이페이지
-          </router-link>
-          <button class="sidebar-item sidebar-btn" @click="handleLogout">
-            <span class="si-icon">🚪</span> 로그아웃
-          </button>
-        </div>
-      </aside>
+      <div v-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
 
-      <!-- 메인 -->
-      <main class="main-content">
-        <div class="content-header">
-          <div>
-            <h1 class="page-title">강의 목록</h1>
-            <p class="page-subtitle" v-if="isInstructor">
-              강사 계정으로 등록된 강의를 확인하고 새 강의를 추가할 수 있습니다.
-            </p>
-          </div>
+      <div v-else-if="store.needsLogin" class="blank">
+        <h3>로그인하면 공연 목록을 볼 수 있습니다</h3>
+        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
+        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
+      </div>
 
-          <router-link
-            v-if="isInstructor"
-            to="/courses/new"
-            class="btn btn-primary create-course-btn"
-          >
-            강의 등록
-          </router-link>
-        </div>
+      <div v-else-if="store.error" class="blank">
+        <h3>공연 목록을 불러오지 못했습니다</h3>
+        <p>{{ store.error }}</p>
+        <button class="btn btn-line btn-sm" style="margin-top:14px" @click="store.fetchCourses()">다시 시도</button>
+      </div>
 
-        <!-- 필터 -->
-        <div class="filter-bar">
-          <button
-            v-for="cat in categories"
-            :key="cat"
-            :class="['filter-chip', { active: selectedCategory === cat }]"
-            @click="selectCategory(cat)"
-          >
-            {{ cat }}
-          </button>
-        </div>
+      <div v-else-if="!list.length" class="blank">
+        <h3>{{ q ? '검색 결과가 없습니다' : '등록된 공연이 없습니다' }}</h3>
+        <p v-if="q">'{{ q }}'와 일치하는 공연이 없습니다.</p>
+        <p v-else>{{ store.genre === 'ALL' ? '아직 등록된 공연이 없습니다.' : '이 장르에 등록된 공연이 없습니다.' }}</p>
+      </div>
 
-        <!-- 로딩 -->
-        <div v-if="loading" class="loading-grid">
-          <div v-for="i in 6" :key="i" class="skeleton-card">
-            <div class="skeleton-thumb"></div>
-            <div class="skeleton-body">
-              <div class="skeleton-line short"></div>
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line medium"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 강의 그리드 -->
-        <div v-else-if="filteredCourses.length" class="course-grid fade-in">
-          <CourseCard
-            v-for="course in filteredCourses"
-            :key="course.id"
-            :course="course"
-          />
-        </div>
-
-        <!-- 빈 상태 -->
-        <div v-else class="empty-state">
-          <p>해당 카테고리의 강의가 없습니다.</p>
-
-          <router-link
-            v-if="isInstructor"
-            to="/courses/new"
-            class="btn btn-primary empty-action-btn"
-          >
-            첫 강의 등록하기
-          </router-link>
-        </div>
-      </main>
-    </div>
+      <ul v-else class="grid">
+        <li v-for="(c, i) in list" :key="c.id" class="up" :style="{ animationDelay: i * 35 + 'ms' }">
+          <CourseCard :course="c" :rank="sort === 'pop' && i < 3 ? i + 1 : 0" />
+        </li>
+      </ul>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import CourseCard from '@/components/CourseCard.vue'
 import { useCourseStore } from '@/store/course.js'
 import { useAuthStore } from '@/store/auth.js'
+import { GENRE_TABS } from '@/domain/genre.js'
 
-const router = useRouter()
-const courseStore = useCourseStore()
+const store = useCourseStore()
 const auth = useAuthStore()
+const sort = ref('pop')
 
-const { categories, loading } = courseStore
+const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
 
-const selectedCategory = computed(() => courseStore.selectedCategory)
-const isInstructor = computed(() => auth.user?.role === 'INSTRUCTOR')
+const q = ref('')
 
-const filteredCourses = computed(() => {
-  if (!Array.isArray(courseStore.courses)) return []
-  if (selectedCategory.value === '전체') return courseStore.courses
-  return courseStore.courses.filter(c => c.category === selectedCategory.value)
+const list = computed(() => {
+  const kw = q.value.trim().toLowerCase()
+  let arr = [...store.visible]
+  // 공연명 부분 일치. 결과가 없으면 빈 목록을 그대로 보여 준다.
+  if (kw) arr = arr.filter((c) => (c.title || '').toLowerCase().includes(kw))
+  if (sort.value === 'pop') return arr.sort((a, b) => (b.enrollmentCount || 0) - (a.enrollmentCount || 0))
+  if (sort.value === 'low') return arr.sort((a, b) => Number(a.price) - Number(b.price))
+  return arr.sort((a, b) => Number(b.id) - Number(a.id))
 })
 
-function selectCategory(cat) {
-  courseStore.setCategory(cat)
-}
-
-function handleLogout() {
-  auth.logout()
-  router.push('/')
-}
-
-onMounted(() => {
-  courseStore.fetchCourses()
-})
+onMounted(() => store.fetchCourses())
 </script>
 
 <style scoped>
-.page-wrapper {
-  min-height: 100vh;
-  background: var(--color-bg-secondary);
+.search { position: relative; margin-bottom: 16px; max-width: 420px; }
+.search .inp { padding-right: 34px; }
+.clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-dim); color: var(--t2); font-size: 11px;
 }
+.clear:hover { background: var(--line-dark); }
 
-.page-layout {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px;
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.sorts { display: flex; align-items: center; gap: 9px; }
+.sort { font-size: 13px; color: var(--t3); }
+.sort:hover { color: var(--t1); }
+.sort.on { color: var(--t1); font-weight: 700; }
+.sep { color: var(--line-dark); font-size: 11px; }
+
+.grid {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 28px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 30px 20px;
 }
 
-/* 사이드바 */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sidebar-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
-}
-
-.sidebar-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-muted);
-  padding: 8px 12px 4px;
-}
-
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  transition: var(--transition);
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  text-decoration: none;
-}
-
-.sidebar-item:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-}
-
-.sidebar-item.active {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-weight: 500;
-}
-
-.si-icon {
-  font-size: 15px;
-}
-
-.sidebar-btn {
-  color: var(--color-text-secondary);
-}
-
-/* 메인 */
-.main-content {
-  min-width: 0;
-}
-
-.content-header {
-  margin-bottom: 20px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.page-subtitle {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
-.create-course-btn {
-  white-space: nowrap;
-  text-decoration: none;
-}
-
-/* 필터 */
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-
-.filter-chip {
-  padding: 7px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  border: 1.5px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-secondary);
-  transition: var(--transition);
-  cursor: pointer;
-}
-
-.filter-chip:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.filter-chip.active {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
-}
-
-/* 강의 그리드 */
-.course-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-/* 스켈레톤 */
-.loading-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.skeleton-card {
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-}
-
-.skeleton-thumb {
-  height: 120px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-}
-
-.skeleton-body {
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-line {
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-}
-
-.skeleton-line.short {
-  width: 40%;
-}
-
-.skeleton-line.medium {
-  width: 70%;
-}
-
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
-}
-
-/* 빈 상태 */
-.empty-state {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--color-text-muted);
-  font-size: 15px;
-}
-
-.empty-action-btn {
-  display: inline-flex;
-  margin-top: 16px;
-  text-decoration: none;
-}
-
-@media (max-width: 992px) {
-  .page-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .course-grid,
-  .loading-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .content-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+@media (max-width: 760px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 22px 12px; }
 }
 </style>
