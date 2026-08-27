@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     kafka_consumer_group_id: str = "recommend-service"
     kafka_topic_enrollment_completed: str = "enrollment.completed"
 
+    # AI 취소표 매칭. 키가 없거나 비활성화돼도 순번 기반 폴백으로 동작한다.
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_enabled: bool = True
+    llm_timeout: int = 15
+    llm_api_url: str = "https://api.openai.com/v1/chat/completions"
+
+    # B2B 수요 예측의 코드 계산 상수(6997bfd 계약).
+    forecast_decay: float = 0.92
+    conversion_retention: float = 0.5
+
+    offer_ttl_seconds: int = 600
+
     class Config:
         env_file = ".env"
 

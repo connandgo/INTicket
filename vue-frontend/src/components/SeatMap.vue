@@ -20,11 +20,11 @@
               :key="s.n"
               type="button"
               class="seat"
-              :class="{ taken: s.taken, on: isPicked(z.grade, s) }"
-              :style="!s.taken ? { '--c': z.color } : null"
-              :disabled="s.taken"
-              :aria-label="`${z.grade}석 ${row.label}열 ${s.n}번${s.taken ? ' 판매완료' : ''}`"
-              :title="`${z.grade}석 ${row.label}${s.n}`"
+              :class="{ taken: s.taken && !isPicked(z.grade, s), on: isPicked(z.grade, s) }"
+              :style="!s.taken || isPicked(z.grade, s) ? { '--c': z.color } : null"
+              :disabled="readOnly || (s.taken && !isPicked(z.grade, s))"
+              :aria-label="`${z.grade}등급 ${row.label}열 ${s.n}번${s.taken && !isPicked(z.grade, s) ? ' 판매완료' : ''}`"
+              :title="seatName(s.id)"
               @click="toggle(z, s)"
             ></button>
           </div>
@@ -38,25 +38,32 @@
       <span class="k"><i class="sw taken"></i>판매 완료</span>
     </p>
 
+    <p v-if="selectionText" class="selection" aria-live="polite">
+      <b>{{ readOnly ? '매칭 좌석' : '선택 좌석' }}</b>
+      <span>{{ selectionText }}</span>
+    </p>
+
     <p class="note">
-      좌석은 등급 단위로 예매되며 <b>개별 좌석 번호는 지정되지 않습니다.</b>
-      배치도는 남은 자리가 어디에 얼마나 있는지 보여주기 위한 것이고,
-      실제 자리는 같은 등급 안에서 현장 배정됩니다.
+      좌석을 누르면 <b>등급·열·번호</b>를 확인할 수 있습니다.
     </p>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { remaining } from '@/api/performance.js'
+import { computed, ref } from 'vue'
+import { SEAT_GRADES } from '@/data/seatLayout.js'
 
 const props = defineProps({
   round: { type: Object, required: true },
   grade: { type: String, default: '' },
   quantity: { type: Number, default: 0 },
-  max: { type: Number, default: 4 }
+  max: { type: Number, default: 4 },
+  selectedSeats: { type: Array, default: () => [] },
+  readOnly: { type: Boolean, default: false },
+  focusGrade: { type: String, default: '' }
 })
 const emit = defineEmits(['pick'])
+const lastPicked = ref('')
 
 const COLOR = {
   VIP: '#8E2340',
@@ -66,49 +73,95 @@ const COLOR = {
 }
 
 // 한 줄에 몇 자리씩 놓을지. 등급마다 정원이 달라 줄 수가 달라진다.
-const PER_ROW = 20
-const ROW_LABELS = 'ABCDEFGHJKLMNPQRSTUV'.split('')
-
+// 열 이름과 열당 좌석 수는 서버 좌석 배치도를 따른다.
+// 화면이 임의로 열을 붙이면 AI 가 배정한 'S-Q-5' 가 배치도에 없는 자리가 된다.
 const zones = computed(() =>
-  props.round.grades.map((g, gi) => {
-    const left = remaining(g)
+  props.round.grades
+    .filter((g) => !props.focusGrade || g.grade === props.focusGrade)
+    .map((g) => {
+    const layout = g.rows || SEAT_GRADES[g.grade]?.rows || {}
     const rows = []
-    // 팔린 자리를 뒤에서부터 채운다 — 앞자리가 먼저 나가는 것처럼 보이게
+    const allSeats = []
     let seatIndex = 0
-    const rowCount = Math.ceil(g.capacity / PER_ROW)
 
-    for (let r = 0; r < rowCount; r++) {
+    for (const [label, count] of Object.entries(layout)) {
       const seats = []
-      const n = Math.min(PER_ROW, g.capacity - r * PER_ROW)
-      for (let i = 1; i <= n; i++) {
-        seats.push({ n: i, idx: seatIndex, taken: seatIndex < g.sold })
+      for (let i = 1; i <= count; i++) {
+        const seat = { n: i, idx: seatIndex, taken: false, id: `${g.grade}-${label}-${i}` }
+        seats.push(seat)
+        allSeats.push(seat)
         seatIndex++
       }
-      rows.push({ label: ROW_LABELS[(gi * 3 + r) % ROW_LABELS.length], seats })
+      rows.push({ label, seats })
     }
 
-    return { grade: g.grade, price: g.price, capacity: g.capacity, left, rows, color: COLOR[g.grade] || '#4B5563' }
-  })
+    // 같은 회차는 새로고침해도 위치가 바뀌지 않는 결정적 무작위 순서로 판매 좌석을 고른다.
+    const capacity = allSeats.length
+    const sold = Math.min(capacity, Math.max(0, Number(g.sold) || 0))
+    const taken = [...allSeats]
+      .sort((a, b) => randomScore(`${props.round.id}-${a.id}`) - randomScore(`${props.round.id}-${b.id}`))
+      .slice(0, sold)
+    const takenIds = new Set(taken.map((s) => s.id))
+    allSeats.forEach((s) => { s.taken = takenIds.has(s.id) })
+
+    return {
+      grade: g.grade,
+      price: g.price,
+      capacity,
+      sold,
+      left: capacity - sold,
+      rows,
+      color: COLOR[g.grade] || '#4B5563'
+    }
+    })
 )
 
-// 선택 표시는 "이 등급에서 앞쪽 quantity개"로 그린다.
-// 실제 좌석 번호를 서버에 보내지 않으므로, 어떤 칸을 칠하든 의미는 같다.
+const selectedSet = computed(() => new Set(props.selectedSeats || []))
+const selectionText = computed(() => {
+  const ids = props.selectedSeats?.length ? props.selectedSeats : (lastPicked.value ? [lastPicked.value] : [])
+  return ids.map(seatName).join(', ')
+})
+
 function isPicked(grade, seat) {
+  if (selectedSet.value.size) return selectedSet.value.has(seat.id)
   if (grade !== props.grade || !props.quantity) return false
   const z = zones.value.find((x) => x.grade === grade)
   if (!z) return false
-  const firstFree = z.capacity - z.left
-  return seat.idx >= firstFree && seat.idx < firstFree + props.quantity
+  const free = z.rows.flatMap((r) => r.seats).filter((s) => !s.taken).slice(0, props.quantity)
+  return free.some((s) => s.id === seat.id)
 }
 
 function toggle(zone, seat) {
-  if (seat.taken || zone.left === 0) return
-  // 같은 등급을 다시 누르면 매수를 하나 늘린다. 다른 등급이면 1매로 시작.
-  const next =
-    zone.grade === props.grade
-      ? (props.quantity % Math.min(props.max, zone.left)) + 1
-      : 1
-  emit('pick', { grade: zone.grade, quantity: next })
+  if (props.readOnly || seat.taken || zone.left === 0) return
+  lastPicked.value = seat.id
+
+  const sameGrade = (props.selectedSeats || []).filter((id) => id.startsWith(`${zone.grade}-`))
+  let seats
+  if (sameGrade.includes(seat.id)) seats = sameGrade.filter((id) => id !== seat.id)
+  else if (sameGrade.length >= Math.min(props.max, zone.left)) seats = [...sameGrade.slice(1), seat.id]
+  else seats = [...sameGrade, seat.id]
+
+  emit('pick', {
+    grade: seats.length ? zone.grade : '',
+    quantity: seats.length,
+    seats,
+    seatId: seat.id,
+    seatLabel: seatName(seat.id)
+  })
+}
+
+function seatName(seatId) {
+  const [grade, row, no] = String(seatId).split('-')
+  return grade && row && no ? `${grade}석 ${row}열 ${no}번` : String(seatId)
+}
+
+function randomScore(text) {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
 }
 </script>
 
@@ -170,6 +223,7 @@ function toggle(zone, seat) {
 .seat:hover:not(:disabled) { background: var(--c); transform: scale(1.28); }
 .seat.on { background: var(--c); border-color: var(--c); box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px var(--c); }
 .seat.taken { background: var(--bg-dim); border-color: var(--line); cursor: not-allowed; }
+.seat.taken.on { background: var(--red); border-color: var(--red-dark); opacity: 1; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 15px; font-size: 11.5px; color: var(--t3); }
 .k { display: inline-flex; align-items: center; gap: 5px; }
@@ -177,6 +231,18 @@ function toggle(zone, seat) {
 .sw.free  { background: #C9D6E8; border: 1px solid #A9BEDA; }
 .sw.sel   { background: #1F4E8C; }
 .sw.taken { background: var(--bg-dim); border: 1px solid var(--line); }
+
+.selection {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--ai-line);
+  background: var(--ai-wash);
+  font-size: 12.5px;
+  color: var(--t2);
+}
+.selection b { color: var(--ai); font-weight: 700; white-space: nowrap; }
 
 .note {
   padding: 10px 12px;

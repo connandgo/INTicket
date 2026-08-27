@@ -24,6 +24,10 @@
   --line:      #E4E7EB;
   --line-dark: #CDD2D9;
 
+  --ai:      #23324D;
+  --ai-wash: #EEF1F6;
+  --ai-line: #CBD4E2;
+
   --ok:      #147A4B;
   --ok-wash: #E8F6EE;
   --warn:      #A8620A;
@@ -153,6 +157,8 @@ ul, ol { list-style: none; }
 .bdg-ok    { background: var(--ok-wash);   color: var(--ok);       border-color: #C9E7D7; }
 .bdg-warn  { background: var(--warn-wash); color: var(--warn);     border-color: #F0DDBB; }
 .bdg-gray  { background: var(--bg-dim);    color: var(--t2);       border-color: var(--line); }
+.bdg-ai    { background: var(--ai-wash);   color: var(--ai);       border-color: var(--ai-line); }
+.bdg-ai-solid { background: var(--ai); color: #fff; }
 .bdg-solid { background: var(--navy);      color: #fff; }
 
 /* ---------- 탭 ---------- */

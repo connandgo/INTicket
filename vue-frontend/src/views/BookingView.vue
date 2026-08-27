@@ -20,7 +20,9 @@
       <template v-else>
         <!-- 단계 -->
         <ol class="steps">
-          <li :class="{ on: step === 1, done: step > 1 }" :aria-current="step === 1 ? 'step' : undefined"><span class="num">1</span>좌석 등급</li>
+          <li :class="{ on: step === 1, done: step > 1 }" :aria-current="step === 1 ? 'step' : undefined">
+            <span class="num">1</span>{{ fromOffer ? '좌석 배정' : '좌석 등급' }}
+          </li>
           <li :class="{ on: step === 2, done: step > 2 }" :aria-current="step === 2 ? 'step' : undefined"><span class="num">2</span>선점 · 결제</li>
           <li :class="{ on: step === 3 }" :aria-current="step === 3 ? 'step' : undefined"><span class="num">3</span>완료</li>
         </ol>
@@ -43,6 +45,7 @@
             :grade="grade"
             :quantity="qty"
             :max="4"
+            :selected-seats="selectedSeats"
             @pick="onSeatPick"
           />
 
@@ -73,7 +76,7 @@
               class="qbtn"
               :class="{ on: qty === n }"
               :disabled="!picked || n > remaining(picked)"
-              @click="qty = n"
+              @click="setQuantity(n)"
             >{{ n }}매</button>
           </div>
           <p class="fhint">1회 최대 4매까지 예매할 수 있습니다.</p>
@@ -98,9 +101,14 @@
             <span class="t-v num">{{ mmss }}</span>
           </div>
 
+          <p v-if="fromOffer" class="alert alert-ok">
+            AI 취소표 매칭으로 <b>배정된 좌석</b>입니다. 좌석을 다시 고르지 않고 결제만 진행합니다.
+          </p>
+
           <h2 class="stitle">결제 내역</h2>
           <dl class="dl">
             <div><dt>좌석 등급</dt><dd>{{ held.grade }}석</dd></div>
+            <div v-if="held.seats?.length"><dt>배정 좌석</dt><dd>{{ held.seats.map(seatName).join(', ') }}</dd></div>
             <div><dt>매수</dt><dd class="num">{{ held.quantity }}매</dd></div>
             <div><dt>1매 가격</dt><dd class="num">{{ held.unitPrice.toLocaleString() }}원</dd></div>
             <div><dt>결제 금액</dt><dd><b class="amt num">{{ held.amount.toLocaleString() }}원</b></dd></div>
@@ -125,7 +133,7 @@
           <dl class="dl">
             <div><dt>공연</dt><dd>{{ c.title }}</dd></div>
             <div><dt>회차</dt><dd class="num">{{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ shortTime(round.time) }}</dd></div>
-            <div><dt>좌석</dt><dd>{{ held.grade }}석 <span class="num">{{ held.quantity }}매</span></dd></div>
+            <div><dt>좌석</dt><dd>{{ held.seats?.length ? held.seats.map(seatName).join(', ') : `${held.grade}석 ${held.quantity}매` }}</dd></div>
             <div><dt>결제 금액</dt><dd class="num">{{ held.amount.toLocaleString() }}원</dd></div>
           </dl>
           <div class="done-acts">
@@ -162,8 +170,10 @@ const loading = ref(true)
 const loadError = ref('')
 
 const step = ref(1)
+const fromOffer = ref(false)
 const grade = ref('')
 const qty = ref(1)
+const selectedSeats = ref([])
 const held = ref(null)
 const err = ref('')
 const holding = ref(false)
@@ -210,6 +220,7 @@ async function loadBooking() {
       return
     }
     round.value = await performanceApi.round(c.value, route.query.round)
+    await applyOfferSeats()
   } catch (e) {
     console.error('[booking] 예매 정보 조회 실패:', e)
     loadError.value = e.response?.data?.message || '잠시 후 다시 시도해 주세요.'
@@ -220,24 +231,45 @@ async function loadBooking() {
 
 onMounted(loadBooking)
 
+async function applyOfferSeats() {
+  const raw = String(route.query.seats || '').trim()
+  if (!raw || !round.value) return
+  const seats = raw.split(',').map((value) => value.trim()).filter(Boolean)
+  const matchedGrade = seats[0]?.split('-')[0]
+  if (!matchedGrade || !round.value.grades.some((item) => item.grade === matchedGrade)) return
+
+  fromOffer.value = true
+  grade.value = matchedGrade
+  qty.value = Math.min(seats.length, 4)
+  selectedSeats.value = seats.slice(0, 4)
+  await doHold()
+  if (step.value !== 2) fromOffer.value = false
+}
+
 onBeforeUnmount(() => {
   stopTimer()
   // 결제 안 하고 화면을 벗어나면 선점을 풀어 준다
   if (step.value === 2 && held.value) releaseHeld()
 })
 
-// 배치도에서 자리를 누르면 그 등급 + 매수로 잡는다.
-// 좌석 번호는 서버로 보내지 않는다(개별 좌석 지정 미지원).
-function onSeatPick({ grade: g, quantity: n }) {
+// 서버 선점은 등급·매수로 처리하고 좌석 번호는 결제 화면에 함께 유지한다.
+function onSeatPick({ grade: g, quantity: n, seats = [] }) {
   grade.value = g
-  qty.value = n
+  qty.value = n || 1
+  selectedSeats.value = seats
   err.value = ''
 }
 
 function pick(g) {
   grade.value = g.grade
+  selectedSeats.value = []
   if (qty.value > remaining(g)) qty.value = 1
   err.value = ''
+}
+
+function setQuantity(n) {
+  qty.value = n
+  selectedSeats.value = []
 }
 
 async function doHold() {
@@ -245,7 +277,8 @@ async function doHold() {
   holding.value = true
   err.value = ''
   try {
-    held.value = await bookingApi.hold(c.value, round.value.id, grade.value, qty.value)
+    const result = await bookingApi.hold(c.value, round.value.id, grade.value, qty.value)
+    held.value = { ...result, seats: [...selectedSeats.value] }
     round.value = await performanceApi.round(c.value, route.query.round)
     step.value = 2
     startTimer(held.value.expiresAt)
@@ -260,6 +293,11 @@ async function doHold() {
   }
 }
 
+function seatName(seatId) {
+  const [g, row, no] = String(seatId).split('-')
+  return g && row && no ? `${g}석 ${row}열 ${no}번` : String(seatId)
+}
+
 function releaseHeld() {
   if (!held.value) return
   bookingApi.release(c.value.id, round.value.id, held.value.grade, held.value.quantity, held.value.holdId)
@@ -272,6 +310,7 @@ function expire() {
   releaseHeld()
   held.value = null
   step.value = 1
+  fromOffer.value = false
   err.value = '결제 시간이 지나 선점이 풀렸습니다. 다시 선택해 주세요.'
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
@@ -287,6 +326,7 @@ function backToPick() {
   releaseHeld()
   held.value = null
   step.value = 1
+  fromOffer.value = false
   performanceApi.round(c.value, route.query.round).then((r) => { round.value = r })
 }
 

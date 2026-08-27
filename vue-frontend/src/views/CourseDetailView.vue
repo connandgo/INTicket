@@ -27,12 +27,13 @@
               <div><dt>장르</dt><dd>{{ label }}</dd></div>
               <div><dt>기준가</dt><dd><b class="price num">{{ price }}원</b> <span class="small muted">R석 1매 기준</span></dd></div>
               <div><dt>누적 예매</dt><dd class="num">{{ (c.enrollmentCount || 0).toLocaleString() }}건</dd></div>
-              <div v-if="hasCap">
-                <dt>정원</dt>
+              <div v-if="rounds.length || hasCap">
+                <dt>{{ rounds.length ? '전체 회차 잔여' : '정원' }}</dt>
                 <dd>
-                  <span class="num">{{ Number(c.capacity).toLocaleString() }}석</span>
+                  <span v-if="rounds.length && !soldOut" class="num">{{ scheduleLeft.toLocaleString() }}석</span>
+                  <span v-else-if="!rounds.length" class="num">{{ Number(c.capacity).toLocaleString() }}석</span>
                   <span v-if="soldOut" class="bdg bdg-red cap-b">매진</span>
-                  <span v-else class="num cap-left" :class="{ few: almostGone }">잔여 {{ left }}석</span>
+                  <span v-else-if="!rounds.length" class="num cap-left" :class="{ few: almostGone }">잔여 {{ left }}석</span>
                 </dd>
               </div>
               <div><dt>기획사</dt><dd class="muted">INTicket 공연기획사 <span class="num">#{{ c.instructorId }}</span></dd></div>
@@ -73,9 +74,15 @@
 
               <template v-else>
                 <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
-                <button class="btn btn-red btn-wide" :disabled="waiting" @click="joinWaitlist">
+                <button
+                  v-if="firstRound"
+                  type="button"
+                  class="btn btn-ai btn-wide"
+                  @click="openWish(firstRound)"
+                >AI에게 원하는 자리 말하기</button>
+                <button class="btn btn-line btn-wide" :disabled="waiting" @click="joinWaitlist">
                   <span v-if="waiting" class="spin spin-w"></span>
-                  {{ waiting ? '등록 중' : '취소표 대기 등록' }}
+                  {{ waiting ? '등록 중' : '조건 없이 대기만 걸기' }}
                 </button>
               </template>
             </section>
@@ -98,6 +105,10 @@
           </p>
           <p v-else-if="DEMO" class="alert alert-info sched-note">
             발표용 데모 데이터입니다. 좌석 선점부터 결제·취소표 대기까지 직접 체험할 수 있습니다.
+          </p>
+
+          <p v-if="wishNotice" class="alert wish-notice" :class="wishNoticeType === 'error' ? 'alert-err' : 'alert-ok'">
+            {{ wishNotice }}
           </p>
 
           <div v-if="loadingRounds" class="load"><span class="spin"></span>회차를 불러오는 중입니다</div>
@@ -131,17 +142,26 @@
                 </li>
               </ul>
 
-              <span v-if="soldOut" class="bdg bdg-red rd-go">매진</span>
               <router-link
-                v-else-if="!auth.isAuthenticated && totalLeft(r) > 0 && c.status === 'ACTIVE'"
+                v-if="!auth.isAuthenticated && totalLeft(r) > 0 && c.status === 'ACTIVE'"
                 :to="loginForRound(r)"
                 class="btn btn-line btn-sm rd-go"
               >로그인 후 예매</router-link>
-              <router-link
-                v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'"
-                :to="`/courses/${c.id}/booking?round=${r.id}`"
-                class="btn btn-red btn-sm rd-go"
-              >예매하기</router-link>
+              <span v-else-if="auth.isAuthenticated && isViewer && c.status === 'ACTIVE'" class="rd-go rd-actions">
+                <button type="button" class="btn btn-ai-line btn-sm" @click="openWish(r)">취소표 매칭</button>
+                <button
+                  type="button"
+                  class="btn btn-occur btn-sm"
+                  :disabled="releasingRoundId === r.id"
+                  @click="releaseTicket(r)"
+                >{{ releasingRoundId === r.id ? '발생 중' : '취소표 발생' }}</button>
+                <router-link
+                  v-if="totalLeft(r) > 0"
+                  :to="`/courses/${c.id}/booking?round=${r.id}`"
+                  class="btn btn-red btn-sm"
+                >예매하기</router-link>
+                <span v-else class="bdg bdg-red">매진</span>
+              </span>
               <span v-else-if="totalLeft(r) === 0" class="bdg bdg-gray rd-go">전 등급 매진</span>
               <span v-else class="rd-go small muted">예매 불가</span>
             </li>
@@ -165,6 +185,22 @@
         </section>
       </template>
     </main>
+
+    <SeatWishModal
+      :open="wishOpen"
+      :course="c"
+      :round="wishRound"
+      @registered="onWishRegistered"
+      @close="wishOpen = false"
+    />
+    <SeatMatchResultModal
+      :open="resultOpen"
+      :course="c"
+      :round="resultRound"
+      :offer="resultOffer"
+      :reason="resultReason"
+      @close="resultOpen = false"
+    />
   </div>
 </template>
 
@@ -173,6 +209,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
+import SeatWishModal from '@/components/SeatWishModal.vue'
+import SeatMatchResultModal from '@/components/SeatMatchResultModal.vue'
 import { useCourseStore } from '@/store/course.js'
 import { useAuthStore } from '@/store/auth.js'
 import { performanceApi, remaining } from '@/api/performance.js'
@@ -181,6 +219,8 @@ import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity, isNotSoldOutError } fr
 import { useWaitlistStore } from '@/store/waitlist.js'
 import { HOLD_MINUTES, DEMO } from '@/config/features.js'
 import { showcaseRounds } from '@/data/showcase.js'
+import { SEAT_GRADES } from '@/data/seatLayout.js'
+import { matchingDemoApi, seatWishApi } from '@/api/seatWish.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -192,8 +232,12 @@ const price = computed(() => Number(c.value?.price || 0).toLocaleString())
 const isViewer = computed(() => auth.user?.role !== 'INSTRUCTOR')
 
 const waitlist = useWaitlistStore()
-const soldOut = computed(() => isSoldOut(c.value))
-const almostGone = computed(() => isAlmostGone(c.value))
+const rounds = ref([])
+const scheduleLeft = computed(() => rounds.value.reduce((sum, round) => sum + totalLeft(round), 0))
+const soldOut = computed(() => rounds.value.length
+  ? rounds.value.every((round) => totalLeft(round) === 0)
+  : isSoldOut(c.value))
+const almostGone = computed(() => rounds.value.length ? scheduleLeft.value <= 10 : isAlmostGone(c.value))
 const left = computed(() => seatsLeft(c.value))
 const hasCap = computed(() => hasCapacity(c.value))
 const myWait = computed(() => waitlist.findByCourse(route.params.id))
@@ -223,9 +267,88 @@ async function joinWaitlist() {
   }
 }
 
-const rounds = ref([])
 const loadingRounds = ref(false)
 const roundsError = ref('')
+const firstRound = computed(() => rounds.value[0] ?? null)
+
+const wishOpen = ref(false)
+const wishRound = ref(null)
+const registeredByRound = ref({})
+const wishNotice = ref('')
+const wishNoticeType = ref('ok')
+const releasingRoundId = ref(null)
+const resultOpen = ref(false)
+const resultRound = ref(null)
+const resultOffer = ref(null)
+const resultReason = ref('')
+
+function openWish(round) {
+  wishRound.value = round
+  wishOpen.value = true
+  wishNotice.value = ''
+}
+
+function onWishRegistered(registered) {
+  registeredByRound.value = {
+    ...registeredByRound.value,
+    [String(registered.roundId)]: registered
+  }
+  wishNoticeType.value = 'ok'
+  wishNotice.value = `${wishRound.value.date.replaceAll('-', '.')} ${shortTime(wishRound.value.time)} 회차의 취소표 희망사항이 등록되었습니다.`
+}
+
+function seatsForGrade(wish) {
+  const grades = wish?.grades?.length ? wish.grades : ['S']
+  const maxPrice = Number(wish?.maxPrice) || Infinity
+  const grade = grades.find((name) => (SEAT_GRADES[name]?.price ?? Infinity) <= maxPrice) || grades[0] || 'S'
+  const rows = SEAT_GRADES[grade]?.rows || SEAT_GRADES.S.rows
+  const seats = []
+  for (const [row, count] of Object.entries(rows)) {
+    for (let number = 1; number <= count; number += 1) seats.push(`${grade}-${row}-${number}`)
+  }
+  return seats
+}
+
+async function releaseTicket(round) {
+  releasingRoundId.value = round.id
+  wishNotice.value = ''
+  try {
+    let registered = registeredByRound.value[String(round.id)]
+    if (!registered) {
+      const mine = await seatWishApi.myWaitlists()
+      registered = [...mine].reverse().find((item) => String(item.courseId) === String(c.value.id))
+    }
+
+    if (!registered) {
+      openWish(round)
+      wishNoticeType.value = 'error'
+      wishNotice.value = '먼저 취소표 매칭에서 원하는 좌석 조건을 등록해 주세요.'
+      return
+    }
+
+    await matchingDemoApi.release(c.value.id, seatsForGrade(registered.wish), 'DEADLINE_BATCH')
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+
+    // internal/released 결과에는 다른 대기자의 제안도 포함될 수 있다.
+    // 반드시 로그인한 사용자의 제안 API를 다시 조회해 본인 좌석만 노출한다.
+    const offers = await seatWishApi.myOffers()
+    const mine = offers.find((item) =>
+      String(item.courseId) === String(c.value.id) && (!item.status || item.status === 'PENDING')
+    )
+    resultRound.value = round
+    resultOffer.value = mine || null
+    resultReason.value = mine ? '' : '현재 로그인한 사용자의 조건에 맞는 좌석이 없습니다.'
+    resultOpen.value = true
+  } catch (e) {
+    console.error('[detail] 취소표 발생 실패:', e)
+    resultRound.value = round
+    resultOffer.value = null
+    resultReason.value = e.response?.data?.detail || e.response?.data?.message || '취소표 발생 요청을 처리하지 못했습니다.'
+    resultOpen.value = true
+  } finally {
+    releasingRoundId.value = null
+  }
+}
 
 function totalLeft(r) {
   return r.grades.reduce((a, g) => a + remaining(g), 0)
@@ -294,19 +417,22 @@ onMounted(async () => {
 .w-d { font-size: 13px; color: var(--t2); line-height: 1.7; }
 .w-d b { font-weight: 700; color: var(--t1); }
 .wait .alert { margin: 0; }
+.btn-ai { background: var(--ai); color: #fff; border-color: var(--ai); }
+.btn-ai:hover:not(:disabled) { background: #16233A; border-color: #16233A; }
 .spin-w { border-color: rgba(255,255,255,.4); border-top-color: #fff; width: 15px; height: 15px; }
 
 .body { margin-top: 46px; }
 
 .sched-note { margin-bottom: 14px; }
 .sched-note b { font-weight: 700; }
+.wish-notice { margin-bottom: 14px; }
 .blank.compact { padding: 30px 20px; }
 .retry { margin-top: 14px; }
 
 .rounds { border-top: 2px solid var(--navy); }
 .rd {
   display: grid;
-  grid-template-columns: 190px 1fr 110px;
+  grid-template-columns: 190px 1fr 280px;
   gap: 18px;
   align-items: center;
   padding: 15px 6px;
@@ -332,6 +458,11 @@ onMounted(async () => {
 .gr-r { font-size: 11.5px; color: var(--t3); }
 .gr-r.few { color: var(--red); font-weight: 700; }
 .rd-go { justify-self: end; }
+.rd-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.btn-ai-line { background: #fff; color: var(--ai); border-color: var(--ai-line); }
+.btn-ai-line:hover:not(:disabled) { background: var(--ai-wash); border-color: var(--ai); }
+.btn-occur { background: #fff; color: var(--red-dark); border-color: #E8B9C1; }
+.btn-occur:hover:not(:disabled) { background: var(--red-wash); border-color: var(--red); }
 
 .desc { font-size: 14.5px; line-height: 1.85; color: var(--t2); white-space: pre-wrap; }
 .notice { display: flex; flex-direction: column; gap: 7px; }
@@ -344,5 +475,6 @@ onMounted(async () => {
   .ttl { font-size: 22px; }
   .rd { grid-template-columns: 1fr; row-gap: 10px; }
   .rd-go { justify-self: start; }
+  .rd-actions { flex-wrap: wrap; justify-content: flex-start; }
 }
 </style>

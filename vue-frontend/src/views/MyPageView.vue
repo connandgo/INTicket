@@ -34,7 +34,7 @@
         <table v-else class="tbl">
           <thead>
             <tr>
-              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th>
+              <th>공연명</th><th>장르</th><th class="r">티켓 가격</th><th class="r">누적 예매</th><th class="r">상태</th><th class="r">AI 분석</th>
             </tr>
           </thead>
           <tbody>
@@ -48,6 +48,7 @@
                   {{ c.status === 'ACTIVE' ? '예매 가능' : '예매 중지' }}
                 </span>
               </td>
+              <td class="r"><router-link :to="`/courses/${c.id}/insights`" class="btn btn-ai-line btn-sm">수요 분석</router-link></td>
             </tr>
           </tbody>
         </table>
@@ -118,23 +119,44 @@
         </p>
       </section>
 
+      <section v-if="!isPlanner" class="sec">
+        <h2 class="stitle">AI 추천 공연</h2>
+        <div v-if="rec.loading" class="load"><span class="spin"></span>추천을 불러오는 중입니다</div>
+        <div v-else-if="rec.error" class="blank compact">
+          <h3>추천을 불러오지 못했습니다</h3>
+          <p>{{ rec.error }}</p>
+          <button class="btn btn-line btn-sm retry" @click="loadRec">다시 시도</button>
+        </div>
+        <div v-else-if="!rec.items.length" class="blank compact">
+          <h3>추천할 공연이 아직 없습니다</h3>
+          <p>공연을 예매하면 취향에 가까운 공연을 골라 드립니다.</p>
+        </div>
+        <template v-else>
+          <p class="recmsg">{{ rec.message }}</p>
+          <ul class="grid"><li v-for="item in rec.items" :key="item.id"><CourseCard :course="item" /></li></ul>
+        </template>
+      </section>
+
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
+import CourseCard from '@/components/CourseCard.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
 import { genreLabel } from '@/domain/genre.js'
 import { performanceApi } from '@/api/performance.js'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
+import { recommendApi } from '@/api/enrollment.js'
 
 const auth = useAuthStore()
 const course = useCourseStore()
 const enroll = useEnrollmentStore()
+const rec = reactive({ items: [], message: '', loading: false, error: '' })
 
 const recentBookings = computed(() => enroll.items.slice(0, 3))
 function bookTitle(e) {
@@ -180,11 +202,31 @@ async function loadPlanner() {
   if (!course.error) await loadSales(myCourses.value)
 }
 
+async function loadRec() {
+  if (!auth.user?.id) return
+  rec.loading = true
+  rec.error = ''
+  try {
+    const response = await recommendApi.forUser(auth.user.id)
+    const data = response?.data?.data ?? response?.data ?? {}
+    rec.items = Array.isArray(data.recommendedCourses) ? data.recommendedCourses : []
+    rec.message = data.basedOnCategory
+      ? `${genreLabel(data.basedOnCategory)} 장르를 기준으로 추천했습니다.`
+      : '현재 예매가 활발한 공연을 추천했습니다.'
+  } catch (e) {
+    console.error('[mypage] 추천 조회 실패:', e)
+    rec.items = []
+    rec.error = e.response?.data?.message || '추천 서비스에 연결하지 못했습니다.'
+  } finally {
+    rec.loading = false
+  }
+}
+
 onMounted(async () => {
   if (isPlanner.value) {
     await loadPlanner()
   } else {
-    enroll.fetchMine()
+    await Promise.all([enroll.fetchMine(), loadRec()])
   }
 })
 </script>
@@ -234,6 +276,7 @@ onMounted(async () => {
 .mttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
 .mat { font-size: 11.5px; color: var(--t3); }
 .more-note { margin-top: 10px; }
+.recmsg { margin-bottom: 16px; color: var(--t2); font-size: 13.5px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 28px 20px; }
 
@@ -260,6 +303,8 @@ onMounted(async () => {
 .tbl th, .tbl td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; text-align: left; }
 .tbl th { background: var(--bg-soft); font-weight: 600; color: var(--t2); font-size: 12.5px; }
 .tbl .r { text-align: right; }
+.btn-ai-line { color: var(--ai); border-color: var(--ai-line); }
+.btn-ai-line:hover { background: var(--ai-wash); border-color: var(--ai); }
 .lk { font-weight: 600; }
 .lk:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
 

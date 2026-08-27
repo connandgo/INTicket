@@ -34,7 +34,10 @@
 
         <nav class="nav">
           <router-link to="/courses" class="nv" :class="{ on: isCourses }">공연</router-link>
-          <router-link v-if="isPlanner" to="/courses/new" class="nv" :class="{ on: $route.path === '/courses/new' }">공연등록</router-link>
+          <template v-if="isPlanner">
+            <router-link to="/courses/new" class="nv" :class="{ on: $route.path === '/courses/new' }">공연등록</router-link>
+            <router-link to="/mypage" class="nv" :class="{ on: isInsight }">AI 수요분석</router-link>
+          </template>
           <router-link v-else-if="auth.isAuthenticated" to="/enrollments" class="nv" :class="{ on: $route.path === '/enrollments' }">예매확인</router-link>
         </nav>
 
@@ -70,7 +73,11 @@ const router = useRouter()
 // STUDENT/INSTRUCTOR 값은 그대로 두고 화면 표시만 바꾼다(명세서 4.1)
 const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
 const roleLabel = computed(() => (isPlanner.value ? '공연기획사' : '관람객'))
-const isCourses = computed(() => route.path === '/courses' || route.path.startsWith('/courses/') && route.path !== '/courses/new')
+const isInsight = computed(() => route.path.endsWith('/insights'))
+const isCourses = computed(() =>
+  route.path === '/courses' ||
+  (route.path.startsWith('/courses/') && route.path !== '/courses/new' && !isInsight.value)
+)
 
 function signOut() {
   // 데모는 인증 서버를 안 쓰므로 앱 세션만 지우면 된다.

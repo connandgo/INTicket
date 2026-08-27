@@ -31,3 +31,9 @@ export const waitlistApi = {
     return api.get('/api/enrollments/waitlist/my')
   }
 }
+
+export const recommendApi = {
+  forUser(userId) {
+    return api.get(`/api/recommend/${userId}`)
+  }
+}

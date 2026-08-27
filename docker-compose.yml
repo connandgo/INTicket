@@ -315,6 +315,48 @@ services:
       - lecture-net
     restart: on-failure:3
 
+  recommend-service:
+    image: inticket/recommend-service:secondary
+    build:
+      context: ./recommend-service
+      dockerfile: Dockerfile
+    container_name: lecture-recommend
+    ports:
+      - "8085:8085"
+    environment:
+      - APP_PORT=8085
+      - APP_NAME=recommend-service
+      - EUREKA_SERVER_URL=http://eureka-server:8761/eureka/
+      - EUREKA_INSTANCE_HOST=recommend-service
+      - JWT_ISSUER_URI=http://localhost:8080
+      - JWK_SET_URI=http://auth-server:9000/oauth2/jwks
+      - ENROLLMENT_SERVICE_URL=http://enrollment-service:8083
+      - COURSE_SERVICE_URL=http://course-service:8082
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - LLM_ENABLED=${LLM_ENABLED:-false}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      auth-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      enrollment-service:
+        condition: service_started
+      course-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - lecture-net
+    restart: on-failure:3
+
   frontend:
     image: inticket/frontend:secondary
     build:
@@ -327,6 +369,8 @@ services:
       api-edge:
         condition: service_healthy
       course-service:
+        condition: service_healthy
+      recommend-service:
         condition: service_healthy
     networks:
       - lecture-net

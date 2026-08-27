@@ -3,8 +3,9 @@ import py_eureka_client.eureka_client as eureka_client
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.config.settings import settings
+from app.data import seed
 from app.kafka.consumer import enrollment_consumer
-from app.router import recommend_router
+from app.router import forecast_router, recommend_router, waitlist_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[Kafka] Consumer 시작 실패: {e}")
 
+    # 인메모리 기반 발표용 대기자를 매 실행마다 동일하게 준비한다.
+    try:
+        seed.load_seed()
+    except Exception as e:
+        logger.warning(f"[Seed] 시드 주입 실패: {e}")
+
     yield
 
     # 종료 시
@@ -54,7 +61,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 라우터 등록
+# 구체 경로를 먼저 등록해야 기존 /{user_id} 추천 경로와 충돌하지 않는다.
+app.include_router(forecast_router.router)
+app.include_router(waitlist_router.router)
 app.include_router(recommend_router.router)
 
 

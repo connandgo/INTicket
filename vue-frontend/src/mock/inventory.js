@@ -1,18 +1,24 @@
-// DEMO 모드의 회차 · 좌석등급 · 잔여수량 · 선점 상태를 브라우저에 보관한다.
-// 화면 코드는 이 파일을 직접 부르지 않고 api/performance.js, api/booking.js 를 거친다.
+// 회차 · 좌석등급 · 잔여수량 · 선점 상태를 브라우저에 들고 있는 임시 저장소.
 //
-// 브라우저 안에서만 유효하며 발표 시연과 화면 검증에 사용한다.
+// performance-service / booking-service 가 생기면 통째로 버릴 파일이다.
+// 그래서 화면 코드는 이 파일을 직접 부르지 않고 api/performance.js, api/booking.js 를 거친다.
+//
+// 한계는 분명하다 — 브라우저 안에서만 유효하고, 다른 사람과 재고가 공유되지 않는다.
+// 발표 시연과 화면 검증까지가 이 파일의 역할이다.
 
 import { HOLD_MINUTES } from '@/config/features.js'
+import { SEAT_GRADES, GRADE_ORDER, capacityOf } from '@/data/seatLayout.js'
 
 const KEY = 'inticket.inventory.v1'
 
-export const GRADE_PRESET = [
-  { grade: 'VIP', rate: 1.6 },
-  { grade: 'R', rate: 1.0 },
-  { grade: 'S', rate: 0.68 },
-  { grade: 'A', rate: 0.45 }
-]
+// 등급·가격·정원은 서버 좌석 배치도(seats.py)를 그대로 따른다.
+// 공연 가격에서 배수로 계산하면 AI 가 배정하는 좌석의 등급·가격과 어긋난다.
+export const GRADE_PRESET = GRADE_ORDER.map((grade) => ({
+  grade,
+  price: SEAT_GRADES[grade].price,
+  capacity: capacityOf(grade),
+  rows: SEAT_GRADES[grade].rows
+}))
 
 function load() {
   try {
@@ -46,7 +52,7 @@ function seedFor(course) {
       weekday: WD[dt.getDay()],
       time,
       grades: GRADE_PRESET.map((g, gi) => {
-        const capacity = [40, 120, 200, 160][gi]
+        const capacity = g.capacity
         // 회차마다, 등급마다 팔린 정도가 달라야 판매 현황이 의미 있게 보인다.
         // 앞등급일수록 그리고 주말 회차일수록 더 팔린 것으로 잡았다.
         const seed = (Number(course.id) * 31 + i * 17 + gi * 7) % 60
@@ -54,8 +60,9 @@ function seedFor(course) {
         const sold = Math.min(capacity, Math.round(capacity * ratio))
         return {
           grade: g.grade,
-          price: Math.round((Number(course.price) * g.rate) / 1000) * 1000,
+          price: g.price,
           capacity,
+          rows: g.rows,
           sold
         }
       })
@@ -71,8 +78,11 @@ export function getPerformance(course) {
   const key = String(course.id)
   if (!db[key]) {
     db[key] = seedFor(course)
-    save(db)
   }
+  // 예전 브라우저 저장값도 현재 좌석 배치도와 맞춘다.
+  // 좌석 그림의 칸 수와 잔여 숫자가 달라지는 현상을 여기서 한 번에 보정한다.
+  normalizePerformance(db[key])
+  save(db)
   return db[key]
 }
 
@@ -82,7 +92,23 @@ export function getRound(course, roundId) {
 }
 
 export function remaining(g) {
-  return Math.max(0, g.capacity - g.sold)
+  const visualCapacity = Object.values(g.rows || {}).reduce((a, n) => a + (Number(n) || 0), 0)
+  const capacity = visualCapacity || Number(g.capacity) || 0
+  return Math.max(0, capacity - (Number(g.sold) || 0))
+}
+
+function normalizePerformance(performance) {
+  for (const round of performance?.rounds || []) {
+    for (const grade of round.grades || []) {
+      const preset = SEAT_GRADES[grade.grade]
+      if (!preset) continue
+      const capacity = capacityOf(grade.grade)
+      grade.price = preset.price
+      grade.rows = preset.rows
+      grade.capacity = capacity
+      grade.sold = Math.min(capacity, Math.max(0, Number(grade.sold) || 0))
+    }
+  }
 }
 
 // 기획사가 회차를 직접 추가할 때

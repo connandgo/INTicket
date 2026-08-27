@@ -72,6 +72,32 @@
 
         <p v-if="cancelErr" class="alert alert-err">{{ cancelErr }}</p>
 
+        <section v-if="offers.length || offerErr" class="osec">
+          <h2 class="stitle">AI 좌석 제안</h2>
+          <p class="onote small">
+            취소표가 나와 희망 조건에 맞는 좌석을 찾았습니다. 결제를 선택하면 배정 좌석을 그대로 선점합니다.
+          </p>
+
+          <ul v-if="offers.length" class="orows">
+            <li v-for="offer in offers" :key="offer.offerId" class="orow">
+              <div class="o-main">
+                <p class="o-seats num">{{ offer.seatsText || seatsLabel(offer.seats) }}</p>
+                <p class="o-msg">{{ offer.message || '희망 조건에 맞는 취소표가 배정되었습니다.' }}</p>
+              </div>
+              <div class="o-act">
+                <span class="o-left num">{{ leftText(offer.expiresAt) }}</span>
+                <button
+                  type="button"
+                  class="btn btn-red btn-sm"
+                  :disabled="accepting === offer.offerId || isExpired(offer.expiresAt)"
+                  @click="goPayment(offer)"
+                >{{ accepting === offer.offerId ? '준비 중' : isExpired(offer.expiresAt) ? '만료됨' : '결제하기' }}</button>
+              </div>
+            </li>
+          </ul>
+          <p v-if="offerErr" class="alert alert-err offer-error">{{ offerErr }}</p>
+        </section>
+
         <section v-if="wait.loading || wait.error || wait.items.length" class="wsec">
           <h2 class="stitle">취소표 대기</h2>
           <div v-if="wait.loading && !wait.items.length" class="load inline-load"><span class="spin"></span>대기 내역을 불러오는 중입니다</div>
@@ -105,6 +131,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
@@ -112,12 +139,70 @@ import { useWaitlistStore, WAIT_LABEL, WAIT_STYLE } from '@/store/waitlist.js'
 import { useCourseStore } from '@/store/course.js'
 import { isNotDeployed } from '@/domain/soldout.js'
 import { bookingApi } from '@/api/booking.js'
+import { courseApi } from '@/api/course.js'
+import { performanceApi } from '@/api/performance.js'
+import { seatWishApi, seatsLabel } from '@/api/seatWish.js'
 import { genreLabel } from '@/domain/genre.js'
 
 const store = useEnrollmentStore()
 const wait = useWaitlistStore()
 const courses = useCourseStore()
+const router = useRouter()
 const POLL_SEC = 15
+
+const offers = ref([])
+const accepting = ref(null)
+const offerErr = ref('')
+
+async function loadOffers() {
+  try {
+    offers.value = (await seatWishApi.myOffers()).filter((item) => !item.status || item.status === 'PENDING')
+  } catch {
+    // 추천 서비스가 아직 기동 중이어도 기존 예매 내역은 정상적으로 보여 준다.
+    offers.value = []
+  }
+}
+
+function isExpired(expiresAt) {
+  return Boolean(expiresAt) && Number(expiresAt) <= Date.now() / 1000
+}
+
+function leftText(expiresAt) {
+  if (!expiresAt) return '10분 내 결제'
+  const seconds = Math.max(0, Math.ceil(Number(expiresAt) - Date.now() / 1000))
+  if (!seconds) return '만료됨'
+  return `${Math.floor(seconds / 60)}분 ${seconds % 60}초 남음`
+}
+
+function unwrap(response) {
+  const data = response?.data
+  return data && typeof data === 'object' && 'data' in data ? data.data : data
+}
+
+async function goPayment(offer) {
+  accepting.value = offer.offerId
+  offerErr.value = ''
+  try {
+    const course = unwrap(await courseApi.getById(offer.courseId))
+    const rounds = await performanceApi.rounds(course)
+    const round = rounds?.[0]
+    if (!round) throw new Error('결제할 회차를 찾을 수 없습니다.')
+
+    const result = await seatWishApi.acceptOffer(offer.offerId)
+    if (result && result.success === false) throw new Error(result.message || '제안을 수락하지 못했습니다.')
+
+    await router.push({
+      path: `/courses/${offer.courseId}/booking`,
+      query: { round: round.id, seats: (offer.seats || []).join(',') }
+    })
+  } catch (error) {
+    console.error('[enrollment-offer] 결제 이동 실패:', error)
+    offerErr.value = error.response?.data?.detail || error.response?.data?.message || error.message || '결제 화면을 준비하지 못했습니다.'
+    await loadOffers()
+  } finally {
+    accepting.value = null
+  }
+}
 
 // 대기 응답에는 courseId 만 온다. 공연명은 목록에서 찾아 붙인다.
 function courseTitle(id) {
@@ -152,11 +237,11 @@ async function doCancel(e) {
 onBeforeUnmount(() => wait.stopPolling())
 
 onMounted(async () => {
-  await Promise.all([wait.fetchMine(), store.fetchMine()])
+  await Promise.all([wait.fetchMine(), store.fetchMine(), loadOffers()])
   // 대기 목록에 공연명을 붙이려면 공연 목록이 필요하다.
   if (wait.items.length && !courses.courses.length) await courses.fetchCourses()
   // 서버가 매칭을 먼저 알려주지 않으므로 대기 중일 때만 주기적으로 다시 읽는다.
-  wait.startPolling(() => store.fetchMine(), POLL_SEC * 1000)
+  wait.startPolling(() => { store.fetchMine(); loadOffers() }, POLL_SEC * 1000)
 
   // 모의 결제가 곧바로 끝나므로 PENDING이 남아 있으면 잠깐 뒤 한 번 더 읽는다.
   if (store.items.some((e) => e.status === 'PENDING')) {
@@ -216,6 +301,20 @@ function fmt(iso) {
 .c-q { font-size: 12px; color: var(--t2); }
 .rprice { font-size: 14px; font-weight: 700; }
 
+.osec { margin-top: 40px; }
+.onote { color: var(--t2); margin-bottom: 12px; }
+.orows { border-top: 2px solid var(--ai); }
+.orow {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 14px 10px; border-bottom: 1px solid var(--line); background: var(--ai-wash);
+}
+.o-main { flex: 1; min-width: 0; }
+.o-seats { font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+.o-msg { margin-top: 4px; color: var(--t2); font-size: 13px; line-height: 1.55; }
+.o-act { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex-shrink: 0; }
+.o-left { color: var(--red-dark); font-size: 11.5px; font-weight: 700; }
+.offer-error { margin-top: 10px; }
+
 .wsec { margin-top: 40px; }
 .inline-load { min-height: 96px; }
 .wnote { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -243,5 +342,8 @@ function fmt(iso) {
   .confirm { flex-wrap: wrap; }
   .action-alert, .wnote { align-items: flex-start; flex-direction: column; }
   .action-alert .btn, .refresh { margin-left: 0; }
+  .orow { flex-direction: column; }
+  .o-act { width: 100%; align-items: stretch; }
+  .o-left { text-align: right; }
 }
 </style>

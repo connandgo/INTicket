@@ -17,6 +17,7 @@ function seed() {
     courses: SHOWCASE.map((course) => ({ ...course })),
     enrollments: [],
     waitlist: [],
+    offers: [],
     seq: { user: 10, course: 100, enrollment: 1000, waitlist: 500 }
   }
 }

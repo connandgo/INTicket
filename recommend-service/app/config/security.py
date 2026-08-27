@@ -1,8 +1,10 @@
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config.settings import settings
+
+USER_ID_CLAIMS = ("userId", "user_id", "sub", "uid")
 
 security = HTTPBearer()
 
@@ -71,6 +73,38 @@ async def verify_token(
             detail=f"유효하지 않은 토큰입니다: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def extract_user_id(payload: dict, request: Request = None) -> int:
+    """JWT claim을 우선하고 Gateway의 X-User-Id 헤더를 폴백으로 사용한다."""
+    for claim in USER_ID_CLAIMS:
+        value = (payload or {}).get(claim)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+
+    if request is not None:
+        value = request.headers.get("X-User-Id")
+        if value:
+            try:
+                return int(value)
+            except ValueError:
+                pass
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="토큰과 헤더에서 사용자 ID를 찾을 수 없습니다",
+    )
+
+
+async def current_user_id(
+    request: Request,
+    payload: dict = Depends(verify_token),
+) -> int:
+    return extract_user_id(payload, request)
 
 
 async def verify_service_token(

@@ -44,6 +44,20 @@ const routes = [
     meta: { requiresAuth: true, viewerOnly: true }
   },
   {
+    // 자연어 기반 AI 취소표 대기
+    path: '/courses/:id(\\d+)/seat-wish',
+    name: 'SeatWish',
+    component: () => import('@/views/SeatWishView.vue'),
+    meta: { requiresAuth: true, viewerOnly: true }
+  },
+  {
+    // 공연기획사 AI 수요 분석
+    path: '/courses/:id(\\d+)/insights',
+    name: 'DemandInsight',
+    component: () => import('@/views/DemandInsightView.vue'),
+    meta: { requiresAuth: true, plannerOnly: true }
+  },
+  {
     // UI-006 / UI-007 마이페이지
     path: '/mypage',
     name: 'MyPage',
