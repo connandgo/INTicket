@@ -48,15 +48,13 @@ class WaitlistItem(BaseModel):
 
 
 class OfferItem(BaseModel):
-    """내게 발행된 좌석 제안 항목."""
+    """프론트에 전달하는 좌석 제안 항목."""
 
     offerId: str
     userId: int
     courseId: int
     seats: List[str]
     seatsText: str
-    message: str
-    reason: str = ""
     expiresAt: float
     status: str
 
@@ -81,7 +79,7 @@ class ReleasedRequest(BaseModel):
 
 
 class ReleasedResponse(BaseModel):
-    """취소표 매칭 결과. reason에 AI가 이 안을 고른 이유가 담긴다."""
+    """데모용 취소표 매칭 결과."""
 
     matched: int
     offers: List[OfferItem] = Field(default_factory=list)

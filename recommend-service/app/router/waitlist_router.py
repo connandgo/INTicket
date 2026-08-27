@@ -39,8 +39,6 @@ def _to_offer_item(offer: dict) -> OfferItem:
         courseId=offer["course_id"],
         seats=offer["seats"],
         seatsText=describe_seats(offer["seats"]),
-        message=offer["message"],
-        reason=offer.get("reason", ""),
         expiresAt=offer["expires_at"],
         status=offer["status"],
     )
