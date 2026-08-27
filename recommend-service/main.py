@@ -3,8 +3,9 @@ import py_eureka_client.eureka_client as eureka_client
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.config.settings import settings
+from app.data import seed
 from app.kafka.consumer import enrollment_consumer
-from app.router import recommend_router
+from app.router import recommend_router, waitlist_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[Kafka] Consumer 시작 실패: {e}")
 
+    # 데모용 대기자 시드 주입 (인메모리라 재시작 시마다 다시 넣어야 한다)
+    try:
+        seed.load_seed()
+    except Exception as e:
+        logger.warning(f"[Seed] 시드 주입 실패: {e}")
+
     yield
 
     # 종료 시
@@ -55,6 +62,9 @@ app = FastAPI(
 )
 
 # 라우터 등록
+# ⚠️ 순서 중요: recommend_router에 "/api/recommend/{user_id}" 가 있어서 나중에 등록해야 한다.
+# 먼저 등록하면 "/api/recommend/waitlists" 가 {user_id}에 먼저 매칭돼 422가 난다.
+app.include_router(waitlist_router.router)
 app.include_router(recommend_router.router)
 
 

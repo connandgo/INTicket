@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     kafka_consumer_group_id: str = "recommend-service"
     kafka_topic_enrollment_completed: str = "enrollment.completed"
 
+    # LLM 설정 (AI 취소표 매칭)
+    # llm_enabled=False 로 두면 LLM 호출 없이 전부 폴백 경로(순번 기준)로 동작한다.
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_enabled: bool = True
+    llm_timeout: int = 15
+    llm_api_url: str = "https://api.openai.com/v1/chat/completions"
+
+    # 제안(offer) 유효시간. 이 시간 내 미응답이면 만료되고 다음 순번으로 승계된다.
+    offer_ttl_seconds: int = 600
+
     class Config:
         env_file = ".env"
 

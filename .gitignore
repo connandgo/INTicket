@@ -40,3 +40,6 @@ __MACOSX/
 
 # === 압축 파일 ===
 *.zip
+
+# === 로컬 환경 변수 (API 키 등 민감정보) ===
+recommend-service/.env
