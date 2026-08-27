@@ -66,6 +66,20 @@ export const useAuthStore = defineStore('auth', () => {
     if (redirect) window.location.href = '/login'
   }
 
+  // 데모 모드 로그인 — auth-server 없이 계정만 골라 들어간다.
+  // 비밀번호를 받지 않는다. 실제 인증이 아니라는 뜻이고, DEMO 일 때만 쓰인다.
+  function demoLogin(email) {
+    const found = readDemoDb().users.find((u) => u.email === email)
+    if (!found) throw new Error('데모 계정을 찾을 수 없습니다.')
+    setToken(`demo.${found.id}.${Date.now()}`)
+    setUser(found)
+    return found
+  }
+
+  function demoUsers() {
+    return DEMO ? readDemoDb().users : []
+  }
+
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
   // Spring Security 의 /logout 은 CSRF 때문에 GET 으로는 세션이 안 끊긴다.

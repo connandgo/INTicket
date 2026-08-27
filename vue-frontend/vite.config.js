@@ -10,7 +10,10 @@ export default defineConfig({
     }
   },
   server: {
-    host: 'localhost',
+    // host: 'localhost' 로 두면 환경에 따라 IPv6(::1)에만 물려서
+    // 브라우저가 127.0.0.1 로 접속할 때 연결이 거부된다.
+    // true(=0.0.0.0)로 두면 IPv4·IPv6 양쪽에서 다 들어온다.
+    host: true,
     port: 3000,
     strictPort: true,
     proxy: {
