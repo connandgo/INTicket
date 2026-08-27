@@ -43,3 +43,6 @@ __MACOSX/
 
 # === 로컬 환경 변수 (API 키 등 민감정보) ===
 recommend-service/.env
+
+# 루트 .env — compose 변수 치환용. LLM 키가 들어가므로 커밋 금지
+.env
