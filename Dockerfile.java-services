@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.7
+
+# Compile every Java service in one builder. Compose targets below share this exact
+# stage, so dependency resolution happens once instead of five competing Gradle homes.
+FROM eclipse-temurin:21-jdk-alpine AS java-builder
+WORKDIR /workspace
+
+COPY eureka-server eureka-server
+COPY user-service user-service
+COPY course-service course-service
+COPY enrollment-service enrollment-service
+COPY payment-service payment-service
+
+RUN chmod +x \
+    eureka-server/gradlew \
+    user-service/gradlew \
+    course-service/gradlew \
+    enrollment-service/gradlew \
+    payment-service/gradlew
+
+RUN --mount=type=cache,id=inticket-gradle-cache,target=/root/.gradle,sharing=locked <<'EOF'
+set -eu
+
+build_service() {
+    service="$1"
+    attempt=1
+    while [ "$attempt" -le 3 ]; do
+        if (cd "$service" && ./gradlew bootJar -x test --build-cache --daemon --max-workers=2); then
+            return 0
+        fi
+        if [ "$attempt" -eq 1 ]; then sleep 5; else sleep 15; fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+for service in eureka-server user-service course-service enrollment-service payment-service; do
+    build_service "$service"
+done
+
+cd eureka-server
+./gradlew --stop
+EOF
+
+FROM eclipse-temurin:21-jre-alpine AS eureka-server
+WORKDIR /app
+COPY --from=java-builder /workspace/eureka-server/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+FROM eclipse-temurin:21-jre-alpine AS user-service
+WORKDIR /app
+COPY --from=java-builder /workspace/user-service/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+FROM eclipse-temurin:21-jre-alpine AS course-service
+WORKDIR /app
+COPY --from=java-builder /workspace/course-service/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+FROM eclipse-temurin:21-jre-alpine AS enrollment-service
+WORKDIR /app
+COPY --from=java-builder /workspace/enrollment-service/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+FROM eclipse-temurin:21-jre-alpine AS payment-service
+WORKDIR /app
+COPY --from=java-builder /workspace/payment-service/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]

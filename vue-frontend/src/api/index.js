@@ -19,7 +19,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// 공연 조회에도 인증이 필요하므로(API_SPEC 2절), 비로그인 상태의 401은 정상이다.
+// Gateway 정책에 따라 비로그인 상태의 401은 정상 응답일 수 있다.
 // 토큰을 들고 있는데 401이 났을 때만 만료로 보고 세션을 정리한다.
 // 화면 이동은 각 화면이 판단한다 — 여기서 강제 이동시키면 공개 화면까지 튕긴다.
 api.interceptors.response.use(

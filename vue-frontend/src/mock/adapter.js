@@ -11,7 +11,7 @@ const ok = (config, data, status = 200) => ({
   status, statusText: 'OK', headers: {}, config
 })
 
-// 백엔드는 실패를 400 + { success:false, message } 로 준다(API_SPEC 기준)
+// 백엔드는 실패를 400 + { success:false, message } 형태로 준다.
 function fail(config, message, status = 400) {
   const err = new Error(message)
   err.response = { data: { success: false, message, data: null }, status, statusText: 'Bad Request', headers: {}, config }
@@ -208,7 +208,7 @@ export default async function mockAdapter(config) {
     e.status = 'CANCELLED'
 
     // 자리가 났으니 대기 순서대로 한 명을 자동 예매·결제 처리한다.
-    // 서버가 하는 일을 그대로 흉내낸 것이다(API_SPEC 3절).
+    // 서버가 하는 일을 그대로 흉내낸 것이다.
     autoMatch(db, e.courseId)
 
     write(db)

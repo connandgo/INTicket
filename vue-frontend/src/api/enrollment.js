@@ -31,10 +31,3 @@ export const waitlistApi = {
     return api.get('/api/enrollments/waitlist/my')
   }
 }
-
-export const recommendApi = {
-  // 규칙 기반 공연 추천
-  forUser(userId) {
-    return api.get(`/api/recommend/${userId}`)
-  }
-}

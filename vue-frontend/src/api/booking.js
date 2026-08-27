@@ -44,7 +44,7 @@ export const bookingApi = {
       courseId: Number(course.id), holdId: held.holdId
     }))
     // 응답은 PENDING이지만 모의 결제가 곧바로 끝나 DB는 이미 ACTIVE일 수 있다.
-    // 확정 여부는 화면에서 목록을 다시 읽어 판단한다(API_SPEC 3절).
+    // 확정 여부는 화면에서 목록을 다시 읽어 판단한다.
 
     // 회차·등급·매수는 백엔드가 아직 모르는 정보라 브라우저에 붙여 둔다.
     const key = String(created?.id ?? `${course.id}-${roundId}`)

@@ -80,28 +80,34 @@ export const useAuthStore = defineStore('auth', () => {
     return DEMO ? readDemoDb().users : []
   }
 
-  // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
-  //
-  // Spring Security 의 /logout 은 CSRF 때문에 GET 으로는 세션이 안 끊긴다.
-  // 그래서 표준 OIDC RP-Initiated Logout(/connect/logout)을 쓴다.
-  // 이 인증 서버에는 post_logout_redirect_uri 로 http://localhost:3000/ 이
-  // 등록되어 있어서, 세션을 끊은 뒤 우리 앱 홈으로 되돌려 보내 준다.
-  function fullLogout() {
+  // 브라우저의 HttpOnly 세션 쿠키를 만료시키고 표준 OIDC 로그아웃도 호출한다.
+  // /kill-session 과 /connect 는 Vite 및 운영 Nginx에 동일하게 구성되어 있다.
+  async function fullLogout() {
     const hint = idToken.value
     clearSession()
 
-    if (!hint) {
-      // id_token 이 없으면(예전 세션 등) 되돌아올 방법이 없다.
-      // 세션이라도 끊고 인증 서버 로그아웃 화면에 맡긴다.
-      window.location.href = `${AUTH_SERVER_URL}/logout`
-      return
+    try {
+      await fetch('/kill-session', { credentials: 'include', cache: 'no-store' })
+    } catch (e) {
+      console.warn('[auth] 세션 쿠키 삭제 실패:', e)
     }
 
-    const params = new URLSearchParams({
-      id_token_hint: hint,
-      post_logout_redirect_uri: POST_LOGOUT_URI
-    })
-    window.location.href = `${AUTH_SERVER_URL}/connect/logout?${params.toString()}`
+    if (hint) {
+      const params = new URLSearchParams({
+        id_token_hint: hint,
+        post_logout_redirect_uri: POST_LOGOUT_URI
+      })
+      try {
+        await fetch(`/connect/logout?${params.toString()}`, {
+          credentials: 'include',
+          redirect: 'manual'
+        })
+      } catch (e) {
+        console.warn('[auth] OIDC 로그아웃 호출 실패:', e)
+      }
+    }
+
+    window.location.href = '/'
   }
 
   // OAuth2 Authorization Code Flow
@@ -110,11 +116,11 @@ export const useAuthStore = defineStore('auth', () => {
       response_type: 'code',
       client_id: import.meta.env.VITE_CLIENT_ID,
       redirect_uri: import.meta.env.VITE_REDIRECT_URI,
-      // API_SPEC.md 기준. 등록되지 않은 scope를 보내면 invalid_scope 로 막힌다.
+      // 인증 서버에 등록되지 않은 scope를 보내면 invalid_scope로 거절된다.
       scope: 'openid',
-      // 세션이 남아 있어도 로그인 화면을 다시 보여 달라는 표준 OIDC 파라미터.
-      // 인증 서버가 무시할 수도 있어서, 확실한 건 fullLogout() 쪽이다.
-      prompt: 'login'
+      // 인증 서버 세션이 남아 있더라도 로그인 폼을 다시 요청한다.
+      prompt: 'login',
+      max_age: '0'
     })
 
     window.location.href = `${AUTH_SERVER_URL}/oauth2/authorize?${params.toString()}`

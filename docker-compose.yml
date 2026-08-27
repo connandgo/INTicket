@@ -25,6 +25,25 @@ services:
     networks:
       - lecture-net
 
+  # docker-entrypoint-initdb.d only runs on an empty volume. This one-shot service
+  # applies the same idempotent schema/grant/seed script to retained volumes too.
+  db-migration:
+    image: mariadb:11.2
+    container_name: lecture-db-migration
+    restart: "no"
+    environment:
+      MARIADB_ROOT_PASSWORD: SqlDba-1
+    volumes:
+      - ./init-db:/migrations:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - mariadb --host=mariadb --user=root --password="$${MARIADB_ROOT_PASSWORD}" < /migrations/01_init.sql
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - lecture-net
+
   kafka:
     image: confluentinc/cp-kafka:7.7.0
     container_name: lecture-kafka
@@ -60,19 +79,21 @@ services:
   eureka-server:
     image: inticket/eureka-server:secondary
     build:
-      context: ./eureka-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.java-services
+      target: eureka-server
     container_name: lecture-eureka
     ports:
       - "8761:8761"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - EUREKA_SERVER_RESPONSE_CACHE_UPDATE_INTERVAL_MS=1000
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
-      interval: 15s
+      interval: 5s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 30s
     networks:
       - lecture-net
 
@@ -81,6 +102,7 @@ services:
 
   auth-server:
     image: msa-lecture/auth-server:1.0
+    pull_policy: never
     container_name: lecture-auth
     ports:
       - "9000:9000"
@@ -90,14 +112,15 @@ services:
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - EUREKA_INSTANCE_LEASE_RENEWAL_INTERVAL_IN_SECONDS=5
     depends_on:
-      mariadb:
-        condition: service_healthy
+      db-migration:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9000/actuator/health"]
-      interval: 15s
+      interval: 5s
       timeout: 5s
       retries: 10
       start_period: 120s
@@ -109,12 +132,14 @@ services:
 
   api-gateway:
     image: msa-lecture/api-gateway:1.0
+    pull_policy: never
     container_name: lecture-gateway
     ports:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      - EUREKA_CLIENT_REGISTRY_FETCH_INTERVAL_SECONDS=5
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://localhost:8080
     depends_on:
@@ -122,6 +147,14 @@ services:
         condition: service_healthy
       auth-server:
         condition: service_healthy
+    healthcheck:
+      # A process-only healthcheck allowed the frontend to start while the Gateway
+      # still had an empty Eureka cache. JWK succeeds only after auth routing works.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/oauth2/jwks"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
     networks:
       - lecture-net
 
@@ -131,8 +164,9 @@ services:
   user-service:
     image: inticket/user-service:secondary
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.java-services
+      target: user-service
     container_name: lecture-user
     ports:
       - "8081:8081"
@@ -145,20 +179,22 @@ services:
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
     depends_on:
-      mariadb:
-        condition: service_healthy
+      db-migration:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       auth-server:
         condition: service_healthy
     networks:
       - lecture-net
+    restart: on-failure:3
 
   course-service:
     image: inticket/course-service:secondary
     build:
-      context: ./course-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.java-services
+      target: course-service
     container_name: lecture-course
     ports:
       - "8082:8082"
@@ -171,20 +207,28 @@ services:
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
     depends_on:
-      mariadb:
-        condition: service_healthy
+      db-migration:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       auth-server:
         condition: service_healthy
     networks:
       - lecture-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/api/courses"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: on-failure:3
 
   enrollment-service:
     image: inticket/enrollment-service:secondary
     build:
-      context: ./enrollment-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.java-services
+      target: enrollment-service
     container_name: lecture-enrollment
     ports:
       - "8083:8083"
@@ -200,22 +244,28 @@ services:
       - COURSE_SERVICE_URL=http://course-service:8082
       - PAYMENT_SERVICE_URL=http://payment-service:8084
     depends_on:
-      mariadb:
-        condition: service_healthy
+      db-migration:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       auth-server:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      course-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_started
     networks:
       - lecture-net
+    restart: on-failure:3
 
   payment-service:
     image: inticket/payment-service:secondary
     build:
-      context: ./payment-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.java-services
+      target: payment-service
     container_name: lecture-payment
     ports:
       - "8084:8084"
@@ -229,8 +279,8 @@ services:
       - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
-      mariadb:
-        condition: service_healthy
+      db-migration:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
       auth-server:
@@ -239,36 +289,7 @@ services:
         condition: service_healthy
     networks:
       - lecture-net
-
-  recommend-service:
-    image: inticket/recommend-service:secondary
-    build:
-      context: ./recommend-service
-      dockerfile: Dockerfile
-    container_name: lecture-recommend
-    ports:
-      - "8085:8085"
-    environment:
-      - EUREKA_SERVER_URL=http://eureka-server:8761/eureka
-      - EUREKA_INSTANCE_HOST=recommend-service
-      - JWT_ISSUER_URI=http://localhost:8080
-      - JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - ENROLLMENT_SERVICE_URL=http://enrollment-service:8083
-      - COURSE_SERVICE_URL=http://course-service:8082
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-      auth-server:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      enrollment-service:
-        condition: service_started
-      course-service:
-        condition: service_started
-    networks:
-      - lecture-net
+    restart: on-failure:3
 
   frontend:
     image: inticket/frontend:secondary
@@ -280,7 +301,9 @@ services:
       - "3000:80"
     depends_on:
       api-gateway:
-        condition: service_started
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
     networks:
       - lecture-net
 

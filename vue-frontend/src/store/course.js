@@ -15,6 +15,7 @@ export const useCourseStore = defineStore('course', () => {
   const current = ref(null)
   const loading = ref(false)
   const error = ref(null)
+  let listRequest = null
   // 실서버는 공연 목록에도 인증을 요구한다(게이트웨이 정책).
   // 로그인 안내와 진짜 장애를 화면에서 구분하려고 따로 둔다.
   const needsLogin = ref(false)
@@ -30,21 +31,30 @@ export const useCourseStore = defineStore('course', () => {
     [...courses.value].sort((a, b) => (b.enrollmentCount || 0) - (a.enrollmentCount || 0))
   )
 
-  async function fetchCourses() {
+  async function fetchCourses({ force = false } = {}) {
+    if (!force && courses.value.length) return courses.value
+    if (listRequest) return listRequest
+
     loading.value = true
     error.value = null
     needsLogin.value = false
-    try {
-      const list = unwrap(await courseApi.getAll())
-      courses.value = Array.isArray(list) ? list : []
-    } catch (e) {
-      console.error('[course] 목록 조회 실패:', e)
-      if (e.response?.status === 401) needsLogin.value = true
-      else error.value = message(e, '공연 목록을 불러오지 못했습니다.')
-      courses.value = []
-    } finally {
-      loading.value = false
-    }
+    listRequest = (async () => {
+      try {
+        const list = unwrap(await courseApi.getAll())
+        courses.value = Array.isArray(list) ? list : []
+        return courses.value
+      } catch (e) {
+        console.error('[course] 목록 조회 실패:', e)
+        if (e.response?.status === 401) needsLogin.value = true
+        else error.value = message(e, '공연 목록을 불러오지 못했습니다.')
+        courses.value = []
+        return courses.value
+      } finally {
+        loading.value = false
+        listRequest = null
+      }
+    })()
+    return listRequest
   }
 
   async function fetchCourse(id) {
@@ -72,7 +82,9 @@ export const useCourseStore = defineStore('course', () => {
 
   async function create(payload) {
     const res = await courseApi.create(payload)
-    return unwrap(res)
+    const created = unwrap(res)
+    if (created && typeof created === 'object') courses.value.unshift(created)
+    return created
   }
 
   function setGenre(code) {

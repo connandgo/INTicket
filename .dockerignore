@@ -1,0 +1,15 @@
+*
+!Dockerfile.java-services
+!eureka-server/
+!eureka-server/**
+!user-service/
+!user-service/**
+!course-service/
+!course-service/**
+!enrollment-service/
+!enrollment-service/**
+!payment-service/
+!payment-service/**
+**/.gradle/
+**/build/
+**/.DS_Store

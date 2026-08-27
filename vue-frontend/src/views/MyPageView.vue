@@ -104,43 +104,16 @@
         </p>
       </section>
 
-      <!-- 관람객: 추천 공연 -->
-      <section v-if="!isPlanner" class="sec">
-        <h2 class="stitle">추천 공연</h2>
-
-        <div v-if="rec.loading" class="load"><span class="spin"></span>추천을 불러오는 중입니다</div>
-
-        <div v-else-if="rec.error" class="blank">
-          <h3>추천을 불러오지 못했습니다</h3>
-          <p>{{ rec.error }}</p>
-          <button class="btn btn-line btn-sm" style="margin-top:14px" @click="loadRec">다시 시도</button>
-        </div>
-
-        <div v-else-if="!rec.items.length" class="blank">
-          <h3>추천할 공연이 아직 없습니다</h3>
-          <p>공연을 한 편 예매하시면 취향에 맞는 공연을 골라 드립니다.</p>
-          <router-link to="/courses" class="btn btn-red btn-sm" style="margin-top:14px">공연 보러 가기</router-link>
-        </div>
-
-        <template v-else>
-          <p class="recmsg">{{ rec.message }}</p>
-          <ul class="grid">
-            <li v-for="c in rec.items" :key="c.id"><CourseCard :course="c" /></li>
-          </ul>
-        </template>
-      </section>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
-import CourseCard from '@/components/CourseCard.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
-import { recommendApi } from '@/api/enrollment.js'
 import { genreLabel } from '@/domain/genre.js'
 import { performanceApi } from '@/api/performance.js'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
@@ -164,8 +137,6 @@ const myCourses = computed(() =>
   course.courses.filter((c) => String(c.instructorId) === String(auth.user?.id))
 )
 
-const rec = reactive({ items: [], message: '', loading: false, error: null })
-
 // 회차별 판매율. performance-service가 생기면 api/performance.js 안만 바뀐다.
 const sales = ref({})
 function salesOf(courseId) {
@@ -179,39 +150,12 @@ async function loadSales(list) {
   sales.value = out
 }
 
-async function loadRec() {
-  const uid = auth.user?.id
-  if (!uid) {
-    rec.error = '사용자 정보를 확인할 수 없습니다.'
-    return
-  }
-  rec.loading = true
-  rec.error = null
-  try {
-    const res = await recommendApi.forUser(uid)
-    const d = res?.data?.data ?? res?.data ?? {}
-    rec.items = Array.isArray(d.recommendedCourses) ? d.recommendedCourses : []
-    // 백엔드 message는 "FRONTEND 장르 기반 추천 공연입니다" 처럼 내부 enum을 그대로 담아 온다.
-    // 화면에는 장르 이름으로 바꿔서 보여 준다.
-    rec.message = d.basedOnCategory
-      ? `${genreLabel(d.basedOnCategory)} 장르를 좋아하시는 것 같아 골랐습니다`
-      : '지금 가장 많이 예매된 공연입니다'
-  } catch (e) {
-    console.error('[mypage] 추천 조회 실패:', e)
-    rec.error = e.response?.data?.message || '추천 서비스에 연결하지 못했습니다.'
-    rec.items = []
-  } finally {
-    rec.loading = false
-  }
-}
-
 onMounted(async () => {
   if (isPlanner.value) {
     await course.fetchCourses()
     await loadSales(myCourses.value)
   } else {
     enroll.fetchMine()
-    loadRec()
   }
 })
 </script>
@@ -257,7 +201,6 @@ onMounted(async () => {
 .mttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
 .mat { font-size: 11.5px; color: var(--t3); }
 .more-note { margin-top: 10px; }
-.recmsg { font-size: 13.5px; color: var(--t2); margin-bottom: 16px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 28px 20px; }
 

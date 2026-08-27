@@ -3,7 +3,23 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'inticket-kill-session',
+      configureServer(server) {
+        server.middlewares.use('/kill-session', (_req, res) => {
+          res.setHeader('Set-Cookie', [
+            'JSESSIONID=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+            'JSESSIONID=; Path=/; Max-Age=0; SameSite=Lax'
+          ])
+          res.setHeader('Cache-Control', 'no-store')
+          res.statusCode = 204
+          res.end()
+        })
+      }
+    }
+  ],
   resolve: {
     alias: {
       '@': resolve(import.meta.dirname, 'src')
@@ -24,6 +40,11 @@ export default defineConfig({
       },
       '/oauth2': {
         target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      },
+      '/connect': {
+        target: 'http://localhost:9000',
         changeOrigin: true,
         secure: false
       }

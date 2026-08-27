@@ -12,9 +12,9 @@ RUN chmod +x gradlew
 # 소스 복사 및 빌드
 COPY src src
 RUN --mount=type=cache,id=inticket-gradle-cache,target=/root/.gradle,sharing=locked \
-    ./gradlew bootJar -x test --no-daemon --max-workers=1 || \
-    (sleep 10 && ./gradlew bootJar -x test --no-daemon --max-workers=1) || \
-    (sleep 30 && ./gradlew bootJar -x test --no-daemon --max-workers=1)
+    ./gradlew bootJar -x test --build-cache --no-daemon --max-workers=2 || \
+    (sleep 5 && ./gradlew bootJar -x test --build-cache --no-daemon --max-workers=2) || \
+    (sleep 15 && ./gradlew bootJar -x test --build-cache --no-daemon --max-workers=2)
 
 # 2단계: 실행 환경 (JRE만 포함 - 이미지 경량화)
 FROM eclipse-temurin:21-jre-alpine

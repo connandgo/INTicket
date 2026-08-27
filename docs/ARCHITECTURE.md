@@ -6,7 +6,7 @@
 - `course-service`만 공연, 회차, 좌석 등급 가격과 판매 재고를 변경합니다.
 - `enrollment-service`만 선점, 예매 상태와 취소표 대기 순서를 변경합니다.
 - `payment-service`만 결제 거래와 취소 상태를 변경합니다.
-- `recommend-service`는 영속 DB를 소유하지 않고 예매·공연 API를 조합합니다.
+- AI 수요분석·좌석매칭과 `recommend-service`는 이번 MVP 범위에서 제외하며 8085 포트는 사용하지 않습니다.
 - 서비스 경계를 넘는 데이터는 물리 FK 대신 ID, REST, Kafka 이벤트로 연결합니다. 같은 서비스 스키마 안에서만 FK를 둡니다.
 
 ## MariaDB 스키마
@@ -157,7 +157,12 @@ Gateway의 기존 라우트와 호환하기 위해 공연 API도 `/api/courses`,
 | course | `GET/POST /api/courses`, `GET /api/courses/{id}`, `GET /api/courses/{id}/schedules`, `POST /api/courses/{id}/schedules`, `GET /api/courses/{id}/sales` |
 | enrollment | `POST/DELETE /api/enrollments/holds`, `POST /api/enrollments`, `GET /api/enrollments/my`, `DELETE /api/enrollments/{id}`, `POST /api/enrollments/waitlist`, `GET /api/enrollments/waitlist/my` |
 | payment | 내부 `POST /api/payments/internal/request`, `POST /api/payments/internal/cancel`; 조회 API |
-| recommend | `GET /api/recommend/{userId}` |
+
+## MVP 시드와 기존 볼륨 마이그레이션
+
+`init-db/01_init.sql`은 새 볼륨의 초기화 스크립트이면서 `db-migration` 일회성 컨테이너가 매 기동 시 다시 실행하는 멱등 마이그레이션입니다. 따라서 기존 볼륨에 `lecture_db`만 있더라도 나머지 도메인 스키마와 `manager` 권한을 자동 생성한 다음 애플리케이션 서비스를 시작합니다.
+
+시드는 프론트의 시각 상태를 고르게 보여주도록 공연 7개와 회차별 좌석 재고를 구성합니다. 공연 1·4는 완전 매진, 공연 2는 잔여 3석, 나머지는 서로 다른 판매율을 가지며 관람객 계정에는 확정 예매, 취소 예매, 취소표 대기를 각각 제공합니다.
 
 ## 일관성 규칙
 

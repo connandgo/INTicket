@@ -13,7 +13,7 @@
 
         <template v-if="auth.isAuthenticated">
           <span class="hi"><b>{{ auth.user?.name || '회원' }}</b>님 · {{ roleLabel }}</span>
-          <router-link to="/enrollments" class="ul">내 예매</router-link>
+          <router-link v-if="!isPlanner" to="/enrollments" class="ul">내 예매</router-link>
           <router-link to="/mypage" class="ul">마이페이지</router-link>
           <button class="ul" @click="signOut">로그아웃</button>
         </template>
@@ -34,8 +34,8 @@
 
         <nav class="nav">
           <router-link to="/courses" class="nv" :class="{ on: isCourses }">공연</router-link>
-          <router-link v-if="auth.isAuthenticated" to="/enrollments" class="nv" :class="{ on: $route.path === '/enrollments' }">예매확인</router-link>
           <router-link v-if="isPlanner" to="/courses/new" class="nv" :class="{ on: $route.path === '/courses/new' }">공연등록</router-link>
+          <router-link v-else-if="auth.isAuthenticated" to="/enrollments" class="nv" :class="{ on: $route.path === '/enrollments' }">예매확인</router-link>
         </nav>
 
         <router-link v-if="!auth.isAuthenticated" to="/login" class="btn btn-red btn-sm cta">로그인하고 예매</router-link>
