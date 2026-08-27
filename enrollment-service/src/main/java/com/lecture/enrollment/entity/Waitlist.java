@@ -7,9 +7,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
+// Enrollment랑 같은 이유로 UNIQUE 제약 안 씀 - MATCHED된 이력이 있어도
+// 나중에 같은 공연에 다시 대기 등록할 수 있어야 함 (WaitlistService 참고)
 @Entity
-@Table(name = "waitlists",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "course_id"}))
+@Table(name = "waitlists")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

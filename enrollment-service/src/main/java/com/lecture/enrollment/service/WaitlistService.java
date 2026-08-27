@@ -1,6 +1,7 @@
 package com.lecture.enrollment.service;
 
 import com.lecture.enrollment.dto.WaitlistDto;
+import com.lecture.enrollment.entity.Enrollment;
 import com.lecture.enrollment.entity.Waitlist;
 import com.lecture.enrollment.repository.EnrollmentRepository;
 import com.lecture.enrollment.repository.WaitlistRepository;
@@ -36,11 +37,14 @@ public class WaitlistService {
             throw new IllegalArgumentException("존재하지 않는 강의입니다: " + courseId);
         }
 
-        if (enrollmentRepository.existsByUserIdAndCourseId(userId, courseId)) {
+        // CANCELLED는 무시 - PENDING/ACTIVE 예매가 있을 때만 막음
+        if (enrollmentRepository.existsByUserIdAndCourseIdAndStatusIn(
+                userId, courseId, List.of(Enrollment.Status.PENDING, Enrollment.Status.ACTIVE))) {
             throw new IllegalArgumentException("이미 예매한 공연입니다");
         }
 
-        if (waitlistRepository.existsByUserIdAndCourseId(userId, courseId)) {
+        // 이전에 MATCHED됐다가 다시 취소한 경우는 재등록 허용, WAITING만 중복 체크
+        if (waitlistRepository.existsByUserIdAndCourseIdAndStatus(userId, courseId, Waitlist.Status.WAITING)) {
             throw new IllegalArgumentException("이미 취소표 대기 등록된 공연입니다");
         }
 

@@ -40,7 +40,9 @@ public class EnrollmentService {
             throw new IllegalArgumentException("존재하지 않는 강의입니다: " + courseId);
         }
 
-        if (enrollmentRepository.existsByUserIdAndCourseId(userId, courseId)) {
+        // CANCELLED는 재예매 허용 - PENDING/ACTIVE인 것만 "이미 예매함"으로 취급
+        if (enrollmentRepository.existsByUserIdAndCourseIdAndStatusIn(
+                userId, courseId, List.of(Enrollment.Status.PENDING, Enrollment.Status.ACTIVE))) {
             throw new IllegalArgumentException("이미 수강신청한 강의입니다");
         }
 
@@ -65,7 +67,9 @@ public class EnrollmentService {
      */
     @Transactional
     public void activateEnrollment(Long userId, Long courseId) {
-        Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(userId, courseId)
+        // CANCELLED 이력이 섞여있을 수 있어서 PENDING/ACTIVE로 필터링해서 조회
+        Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseIdAndStatusIn(
+                        userId, courseId, List.of(Enrollment.Status.PENDING, Enrollment.Status.ACTIVE))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "수강 정보를 찾을 수 없습니다 - userId: " + userId + ", courseId: " + courseId));
 
