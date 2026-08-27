@@ -220,6 +220,7 @@ import PosterArt from '@/components/PosterArt.vue'
 import DemandTrendChart from '@/components/DemandTrendChart.vue'
 import { useCourseStore } from '@/store/course.js'
 import { forecastApi } from '@/api/forecast.js'
+import { performanceApi } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
 import { useAuthStore } from '@/store/auth.js'
 
@@ -247,7 +248,23 @@ onMounted(async () => {
   await store.fetchCourse(route.params.id)
   if (!course.value || !isMine.value) { loading.value = false; return }
 
-  a.value = await forecastApi.analyze(course.value)
+  // 좌석 수는 예매 화면과 같은 재고에서 가져온다. course.capacity 로 계산하면
+  // 좌석 배치도(회차당 520석)와 다른 숫자가 나와 같은 공연이 두 값으로 보인다.
+  let stock = null
+  try {
+    const sales = await performanceApi.sales(course.value)
+    if (sales?.length) {
+      stock = {
+        capacity: sales.reduce((t, r) => t + r.capacity, 0),
+        sold: sales.reduce((t, r) => t + r.sold, 0),
+        roundSeats: Math.round(sales.reduce((t, r) => t + r.capacity, 0) / sales.length)
+      }
+    }
+  } catch (e) {
+    console.warn('[insight] 회차 재고를 받지 못했습니다:', e)
+  }
+
+  a.value = await forecastApi.analyze(course.value, null, stock)
 
   // 시뮬레이션 기본값을 AI 추천값으로 채워 둔다
   const d = new Date()

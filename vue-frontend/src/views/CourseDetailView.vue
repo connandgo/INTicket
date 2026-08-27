@@ -56,47 +56,6 @@
               </div>
             </dl>
 
-            <!-- 매진 → 취소표 대기 (Sprint2) -->
-            <section v-if="soldOut" class="wait">
-              <p class="w-t">이 공연은 매진되었습니다</p>
-              <p class="w-d">
-                취소표 대기를 걸어두면, 누군가 예매를 취소하는 순간
-                <b>대기 순서대로 자동으로 예매·결제까지 처리</b>됩니다.
-              </p>
-
-              <template v-if="!auth.isAuthenticated">
-                <router-link to="/login" class="btn btn-red btn-wide">로그인하고 대기 걸기</router-link>
-              </template>
-
-              <template v-else-if="myWait">
-                <p class="alert" :class="myWait.status === 'MATCHED' ? 'alert-ok' : 'alert-info'">
-                  <template v-if="myWait.status === 'MATCHED'">
-                    자리가 나서 <b>자동으로 예매되었습니다.</b>
-                    <router-link to="/enrollments" class="lk">내 예매</router-link>에서 확인하세요.
-                  </template>
-                  <template v-else>
-                    <b>대기 중</b>입니다. 자리가 나면 자동으로 예매됩니다.
-                  </template>
-                </p>
-              </template>
-
-              <template v-else-if="!isViewer">
-                <p class="alert alert-info">공연기획사 계정은 대기 등록을 할 수 없습니다.</p>
-              </template>
-
-              <template v-else>
-                <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
-                <button v-if="firstRound" type="button" class="btn btn-ai btn-wide"
-                        @click="openWish(firstRound)">
-                  취소표 매칭 신청하기
-                </button>
-                <button class="btn btn-line btn-wide" :disabled="waiting" @click="joinWaitlist">
-                  <span v-if="waiting" class="spin spin-w"></span>
-                  {{ waiting ? '등록 중' : '조건 없이 대기만 걸기' }}
-                </button>
-              </template>
-            </section>
-
             <p v-if="store.isShowcase" class="alert alert-info">
               로그인하시면 예매와 취소표 매칭을 이용할 수 있습니다.
             </p>
@@ -210,8 +169,7 @@ import { useCourseStore } from '@/store/course.js'
 import { useAuthStore } from '@/store/auth.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
-import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity, isNotSoldOutError } from '@/domain/soldout.js'
-import { useWaitlistStore } from '@/store/waitlist.js'
+import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity } from '@/domain/soldout.js'
 import { HOLD_MINUTES } from '@/config/features.js'
 import { seatWishApi, matchingDemoApi } from '@/api/seatWish.js'
 import { SEAT_GRADES } from '@/data/seatLayout.js'
@@ -225,7 +183,6 @@ const label = computed(() => genreLabel(c.value?.category))
 const price = computed(() => Number(c.value?.price || 0).toLocaleString())
 const isViewer = computed(() => auth.user?.role !== 'INSTRUCTOR')
 
-const waitlist = useWaitlistStore()
 const rounds = ref([])
 const loadingRounds = ref(false)
 const scheduleLeft = computed(() => rounds.value.reduce((sum, round) => sum + totalLeft(round), 0))
@@ -235,30 +192,7 @@ const soldOut = computed(() => rounds.value.length
 const almostGone = computed(() => rounds.value.length ? scheduleLeft.value <= 10 : isAlmostGone(c.value))
 const left = computed(() => seatsLeft(c.value))
 const hasCap = computed(() => hasCapacity(c.value))
-const myWait = computed(() => waitlist.findByCourse(route.params.id))
 
-const waiting = ref(false)
-const waitErr = ref('')
-
-async function joinWaitlist() {
-  waiting.value = true
-  waitErr.value = ''
-  try {
-    await waitlist.register(route.params.id)
-  } catch (e) {
-    console.error('[detail] 대기 등록 실패:', e)
-    if (isNotSoldOutError(e)) {
-      waitErr.value = '방금 자리가 났습니다. 대기 대신 바로 예매하실 수 있습니다.'
-      await store.fetchCourse(route.params.id)
-    } else {
-      waitErr.value = e.response?.data?.message || '대기 등록에 실패했습니다.'
-    }
-  } finally {
-    waiting.value = false
-  }
-}
-
-const firstRound = computed(() => rounds.value[0] ?? null)
 const wishOpen = ref(false)
 const wishRound = ref(null)
 const registeredByRound = ref({})
@@ -349,7 +283,6 @@ function totalLeft(r) {
 onMounted(async () => {
   await store.fetchCourse(route.params.id)
   if (!c.value) return
-  if (auth.isAuthenticated && isViewer.value) waitlist.fetchMine()
   loadingRounds.value = true
   try {
     rounds.value = await performanceApi.rounds(c.value)
@@ -375,22 +308,6 @@ onMounted(async () => {
 .cap-b { margin-left: 8px; }
 .cap-left { margin-left: 8px; font-size: 12.5px; color: var(--t3); }
 .cap-left.few { color: var(--red); font-weight: 700; }
-
-.wait {
-  padding: 16px 18px;
-  border: 1px solid var(--red);
-  border-radius: var(--r-lg);
-  background: var(--red-wash);
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.w-t { font-size: 15px; font-weight: 800; color: var(--red-dark); letter-spacing: -0.04em; }
-.w-d { font-size: 13px; color: var(--t2); line-height: 1.7; }
-.w-d b { font-weight: 700; color: var(--t1); }
-.wait .alert { margin: 0; }
-.spin-w { border-color: rgba(255,255,255,.4); border-top-color: #fff; width: 15px; height: 15px; }
-
 .body { margin-top: 46px; }
 
 .rounds { border-top: 2px solid var(--navy); }
@@ -426,11 +343,7 @@ onMounted(async () => {
 .ai-b { border-color: var(--ai-line); color: var(--ai); }
 .ai-b:hover { border-color: var(--ai); background: var(--ai-wash); }
 .occur-b { border-color: #E8B9C1; color: var(--red-dark); }
-.occur-b:hover:not(:disabled) { border-color: var(--red); background: var(--red-wash); }
-.btn-ai { background: var(--ai); color: #fff; border-color: var(--ai); }
-.btn-ai:hover:not(:disabled) { background: #5A38CC; border-color: #5A38CC; }
-
-.desc { font-size: 14.5px; line-height: 1.85; color: var(--t2); white-space: pre-wrap; }
+.occur-b:hover:not(:disabled) { border-color: var(--red); background: var(--red-wash); }.desc { font-size: 14.5px; line-height: 1.85; color: var(--t2); white-space: pre-wrap; }
 .notice { display: flex; flex-direction: column; gap: 7px; }
 .notice li { position: relative; padding-left: 12px; font-size: 13.5px; color: var(--t2); line-height: 1.7; }
 .notice li::before { content: ''; position: absolute; left: 0; top: 10px; width: 3px; height: 3px; border-radius: 50%; background: var(--t4); }

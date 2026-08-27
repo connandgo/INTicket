@@ -43,12 +43,17 @@ function verdictOf(rate) {
  * @param {object} course  CourseResponse (capacity, enrollmentCount, title ...)
  * @param {number} waitingCount  취소표 대기자 수. 집계 API 가 없으면 null.
  */
-export function analyze(course, waitingCount = null) {
+/**
+ * @param {object} stock  실제 좌석 재고. { capacity, sold, roundSeats }
+ *   예매 화면이 쓰는 좌석 배치도와 같은 값이어야 한다. 없으면 course 값으로 계산하는데,
+ *   그러면 '전체 좌석 1,204석'처럼 좌석 배치도(회차당 520석)와 다른 숫자가 나온다.
+ */
+export function analyze(course, waitingCount = null, stock = null) {
   const id = Number(course.id) || 1
   const rand = seeded(id * 7919)
 
-  const capacity = course.capacity ?? null
-  const sold = Number(course.enrollmentCount || 0)
+  const capacity = stock?.capacity ?? course.capacity ?? null
+  const sold = Number(stock?.sold ?? course.enrollmentCount ?? 0)
   const sellRate = capacity ? Math.min(1, sold / capacity) : null
   const soldOut = capacity != null && sold >= capacity
 
@@ -94,7 +99,9 @@ export function analyze(course, waitingCount = null) {
     { weekday: '일', time: '14:00', w: 0.78 },
     { weekday: '금', time: '20:00', w: 0.64 }
   ]
-  const extraSeats = capacity || 1000
+  // 추가 회차 한 번의 좌석 수다. 공연 전체 좌석을 쓰면 한 회차가 전 회차를
+  // 합친 만큼 팔 수 있다는 계산이 돼서 '718 / 1,204석' 같은 값이 나온다.
+  const extraSeats = stock?.roundSeats || capacity || 1000
   const candidates = slots
     .map((s) => {
       // 유효수요 중 그 회차로 옮겨올 수 있는 몫

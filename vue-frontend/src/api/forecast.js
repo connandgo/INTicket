@@ -58,7 +58,7 @@ function unwrap(res) {
 }
 
 export const forecastApi = {
-  async analyze(course, waitingCount = null) {
+  async analyze(course, waitingCount = null, stock = null) {
     try {
       const res = await api.get(`/api/recommend/forecast/${course.id}`)
       const data = unwrap(res)
@@ -68,7 +68,7 @@ export const forecastApi = {
       // recommend-service 가 죽어 있어도 이 화면은 떠야 한다(장애 격리).
       console.warn('[forecast] AI 분석을 받지 못해 로컬 추정으로 표시합니다:', e?.response?.status || e)
     }
-    return model.analyze(course, waitingCount)
+    return model.analyze(course, waitingCount, stock)
   },
 
   /**
