@@ -18,6 +18,20 @@ export const enrollmentApi = {
   }
 }
 
+// 취소표 대기 (Sprint2)
+export const waitlistApi = {
+  // 매진된 공연에만 등록할 수 있다. 매진이 아니면 400.
+  register(courseId) {
+    return api.post('/api/enrollments/waitlist', { courseId })
+  },
+
+  // 내 대기 목록. status 가 WAITING → MATCHED 로 바뀐다.
+  // 서버가 먼저 알려주지 않으므로 화면에서 다시 불러 확인해야 한다.
+  mine() {
+    return api.get('/api/enrollments/waitlist/my')
+  }
+}
+
 export const recommendApi = {
   // 규칙 기반 공연 추천
   forUser(userId) {

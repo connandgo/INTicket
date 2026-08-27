@@ -64,8 +64,48 @@
         </div>
       </section>
 
+      <!-- 관람객: 내 예매 -->
+      <section v-if="!isPlanner" class="sec">
+        <h2 class="stitle">
+          내 예매
+          <router-link to="/enrollments" class="more">전체 보기 ›</router-link>
+        </h2>
+
+        <div v-if="enroll.loading" class="load"><span class="spin"></span>불러오는 중입니다</div>
+
+        <div v-else-if="enroll.error" class="blank">
+          <h3>예매 내역을 불러오지 못했습니다</h3>
+          <p>{{ enroll.error }}</p>
+        </div>
+
+        <div v-else-if="!enroll.items.length" class="blank">
+          <h3>아직 예매한 공연이 없습니다</h3>
+          <p>마음에 드는 공연을 골라 예매해 보세요.</p>
+          <router-link to="/courses" class="btn btn-red btn-sm" style="margin-top:14px">공연 보러 가기</router-link>
+        </div>
+
+        <ul v-else class="mine">
+          <li v-for="e in recentBookings" :key="e.id" class="mrow">
+            <router-link :to="`/courses/${e.courseId}`" class="mposter">
+              <PosterArt :id="e.courseId" :title="bookTitle(e)" :genre="bookGenre(e)" />
+            </router-link>
+            <div class="mmain">
+              <span class="bdg bdg-gray">{{ bookGenre(e) }}</span>
+              <router-link :to="`/courses/${e.courseId}`" class="mttl">{{ bookTitle(e) }}</router-link>
+              <span class="mat num">예매번호 {{ e.id }}</span>
+            </div>
+            <span class="bdg" :class="STATUS_STYLE[e.status]">{{ STATUS_LABEL[e.status] }}</span>
+          </li>
+        </ul>
+
+        <p v-if="enroll.items.length > 3" class="small muted more-note">
+          최근 {{ recentBookings.length }}건만 보여드립니다. 나머지는
+          <router-link to="/enrollments" class="lk">내 예매</router-link>에서 확인하세요.
+        </p>
+      </section>
+
       <!-- 관람객: 추천 공연 -->
-      <section v-else class="sec">
+      <section v-if="!isPlanner" class="sec">
         <h2 class="stitle">추천 공연</h2>
 
         <div v-if="rec.loading" class="load"><span class="spin"></span>추천을 불러오는 중입니다</div>
@@ -97,14 +137,25 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import CourseCard from '@/components/CourseCard.vue'
+import PosterArt from '@/components/PosterArt.vue'
 import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
 import { recommendApi } from '@/api/enrollment.js'
 import { genreLabel } from '@/domain/genre.js'
 import { performanceApi } from '@/api/performance.js'
+import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
 
 const auth = useAuthStore()
 const course = useCourseStore()
+const enroll = useEnrollmentStore()
+
+const recentBookings = computed(() => enroll.items.slice(0, 3))
+function bookTitle(e) {
+  return e.course?.title || `공연 #${e.courseId}`
+}
+function bookGenre(e) {
+  return genreLabel(e.course?.category)
+}
 
 const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
 
@@ -159,6 +210,7 @@ onMounted(async () => {
     await course.fetchCourses()
     await loadSales(myCourses.value)
   } else {
+    enroll.fetchMine()
     loadRec()
   }
 })
@@ -187,6 +239,24 @@ onMounted(async () => {
 .nm { font-size: 16px; font-weight: 700; letter-spacing: -0.04em; }
 
 .sec { margin-bottom: 44px; }
+.stitle { display: flex; align-items: baseline; justify-content: space-between; }
+.more { font-size: 12.5px; font-weight: 500; color: var(--t3); }
+.more:hover { color: var(--red); }
+
+.mine { border-top: 1px solid var(--line); }
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.mposter { width: 52px; border-radius: var(--r); overflow: hidden; flex-shrink: 0; }
+.mmain { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-right: auto; min-width: 0; }
+.mttl { font-size: 14.5px; font-weight: 700; letter-spacing: -0.04em; }
+.mttl:hover { color: var(--red); text-decoration: underline; text-underline-offset: 3px; }
+.mat { font-size: 11.5px; color: var(--t3); }
+.more-note { margin-top: 10px; }
 .recmsg { font-size: 13.5px; color: var(--t2); margin-bottom: 16px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 28px 20px; }
