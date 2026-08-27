@@ -77,14 +77,13 @@
                 취소표가 나오면 조건에 맞는 순서로 좌석을 배정받습니다.
               </p>
               <p v-if="matchedNote" class="alert alert-info">{{ matchedNote }}</p>
-              <div class="two">
-                <button class="btn btn-line" :disabled="releasing" @click="runMatching">
-                  {{ releasing ? '처리 중' : '취소표 매칭' }}
-                </button>
-                <button class="btn btn-red" :disabled="checking" @click="showResult">
-                  {{ checking ? '조회 중' : '결과보기' }}
-                </button>
-              </div>
+              <button class="btn btn-red btn-wide" :disabled="releasing" @click="runMatching">
+                <span v-if="releasing" class="spin spin-w"></span>{{ releasing ? '매칭 중' : '취소표 발생' }}
+              </button>
+              <p class="fhint">
+                마감 직전 미결제분이 한꺼번에 취소되는 상황입니다.
+                조건에 맞으면 좌석이 배정되고 바로 결제로 넘어갑니다.
+              </p>
             </template>
           </article>
 
@@ -139,6 +138,7 @@ import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
+import { SEAT_GRADES } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -156,11 +156,11 @@ const waiting = ref(false)
 const waitErr = ref('')
 const registered = ref(null)   // 등록 결과 { waitlistId, seq, parsed, buckets }
 const releasing = ref(false)
-const checking = ref(false)
 const paying = ref(false)
 const matchedNote = ref('')
 const modal = ref(null)        // { offer } | { offer: null }
-// 취소표 매칭을 실행한다. 결과는 '결과보기'에서 확인한다.
+// 취소표 발생부터 결과 팝업까지 한 번에 처리한다.
+// 버튼을 두 번 누르게 하면 시연 중에 흐름이 끊긴다.
 //
 // ⚠️ internal/released 의 응답에는 다른 대기자에게 나간 제안도 섞여 있다.
 // 그걸 그대로 화면에 쓰면 남의 배정 정보가 노출된다. 응답은 성공 여부만 보고,
@@ -170,42 +170,36 @@ async function runMatching() {
   matchedNote.value = ''
   modal.value = null
   try {
-    await matchingDemoApi.release(route.params.id, pickSeats())
-    matchedNote.value = '매칭을 실행했습니다. 결과보기를 눌러 확인하세요.'
-  } catch (e) {
-    console.error('[매칭] 실행 실패:', e)
-    matchedNote.value = '매칭을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.'
-  } finally {
-    releasing.value = false
-  }
-}
-
-// 지금 로그인한 사용자에게 배정된 좌석만 조회해 팝업으로 보여준다.
-async function showResult() {
-  checking.value = true
-  try {
-    // 서버가 매칭을 끝낼 시간을 준다
-    await new Promise((r) => setTimeout(r, 3000))
+    await matchingDemoApi.release(route.params.id, pickSeats(), 'DEADLINE_BATCH')
+    // 서버가 배분을 끝낼 시간을 준다
+    await new Promise((r) => setTimeout(r, 1200))
     const offers = await seatWishApi.myOffers()
     const mine = offers.find(
       (o) => String(o.courseId) === String(route.params.id) && o.status === 'PENDING'
     )
     modal.value = { offer: mine || null }
   } catch (e) {
-    console.error('[매칭] 결과 조회 실패:', e)
-    modal.value = { offer: null }
+    console.error('[매칭] 실패:', e)
+    matchedNote.value = '매칭을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
-    checking.value = false
+    releasing.value = false
   }
 }
 
-// 풀린 좌석을 고른다. 신청 조건의 등급을 우선 쓰고, 없으면 S등급으로 둔다.
+// 풀리는 좌석을 만든다.
+//
+// 한 석만 풀면 앞순번 대기자 한 명에게만 가고 끝난다. 시드에 대기자가 90명 있어서
+// 뒤에 신청한 사람은 아무리 눌러도 배정될 수 없다. 그래서 마감 직전 미결제분이
+// 한꺼번에 취소되는 상황(DEADLINE_BATCH)으로 해당 등급 좌석을 통째로 푼다.
+// 서버는 이 모드에서 만족 인원을 최대화하므로 뒷순번까지 배정이 내려간다.
 function pickSeats() {
   const g = wish.value?.grades?.[0] || 'S'
-  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'T' }
-  const row = rows[g] || 'Q'
-  const n = wish.value?.quantity || 1
-  return Array.from({ length: n }, (_, i) => `${g}-${row}-${i + 5}`)
+  const rows = SEAT_GRADES[g]?.rows || SEAT_GRADES.S.rows
+  const seats = []
+  for (const [row, n] of Object.entries(rows)) {
+    for (let i = 1; i <= n; i++) seats.push(`${g}-${row}-${i}`)
+  }
+  return seats
 }
 
 async function goPay() {
