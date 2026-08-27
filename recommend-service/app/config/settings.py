@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     llm_timeout: int = 15
     llm_api_url: str = "https://api.openai.com/v1/chat/completions"
 
+    # B2B 수요 분석 계산 상수. LLM이 아닌 코드 계산에서 사용한다.
+    forecast_decay: float = 0.92
+    conversion_retention: float = 0.5
+
     # 제안(offer) 유효시간. 이 시간 내 미응답이면 만료되고 다음 순번으로 승계된다.
     offer_ttl_seconds: int = 600
 
