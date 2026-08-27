@@ -76,7 +76,12 @@ function close() {
 
 function goBooking() {
   close()
-  router.push(`/courses/${props.course.id}/booking?round=${props.round.id}`)
+  // 배정받은 좌석을 들고 간다. 좌석이 실려야 예매 화면이 등급 선택을 건너뛰고
+  // 곧바로 선점·결제로 넘어간다. 빈손으로 보내면 처음부터 다시 고르게 된다.
+  router.push({
+    path: `/courses/${props.course.id}/booking`,
+    query: { round: props.round.id, seats: (props.offer?.seats || []).join(',') }
+  })
 }
 </script>
 

@@ -214,6 +214,7 @@ import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity, isNotSoldOutError } fr
 import { useWaitlistStore } from '@/store/waitlist.js'
 import { HOLD_MINUTES } from '@/config/features.js'
 import { seatWishApi, matchingDemoApi } from '@/api/seatWish.js'
+import { SEAT_GRADES } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -301,11 +302,17 @@ async function releaseTicket(round) {
       return
     }
 
-    const seats = pickReleasedSeats(registered.wish)
-    const result = await matchingDemoApi.release(c.value.id, seats)
+    await matchingDemoApi.release(c.value.id, pickReleasedSeats(registered.wish), 'DEADLINE_BATCH')
+    // 서버가 배분을 끝낼 시간을 준다
+    await new Promise((r) => setTimeout(r, 1200))
+
+    // ⚠️ release 응답에는 다른 대기자에게 나간 제안도 섞여 있다. 그걸 그대로 쓰면
+    // 남의 배정 좌석이 내 화면에 뜬다. 내 좌석은 offers/my 로만 받아 온다.
+    const offers = await seatWishApi.myOffers()
     resultRound.value = round
-    resultOffer.value = result?.offers?.[0] || null
-    resultReason.value = result?.reason || ''
+    resultOffer.value =
+      offers.find((o) => String(o.courseId) === String(c.value.id) && o.status === 'PENDING') || null
+    resultReason.value = ''
     resultOpen.value = true
   } catch (e) {
     console.error('[detail] 취소표 발생 실패:', e)
@@ -318,14 +325,21 @@ async function releaseTicket(round) {
   }
 }
 
+// 풀리는 좌석을 만든다.
+//
+// 한 석만 풀면 앞순번 대기자 한 명에게만 가고 끝난다. 서버 시드에 대기자가
+// 90명 있어서 방금 신청한 사람은 아무리 눌러도 배정될 수 없었다. 그래서 마감
+// 직전 미결제분이 한꺼번에 취소되는 상황으로 해당 등급을 통째로 푼다.
 function pickReleasedSeats(wish) {
   const grades = wish?.grades?.length ? wish.grades : ['S']
-  const prices = { VIP: 240000, R: 150000, S: 102000, A: 68000 }
-  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'S' }
   const maxPrice = Number(wish?.maxPrice) || Infinity
-  const grade = grades.find((g) => prices[g] <= maxPrice) || grades[0] || 'S'
-  const quantity = Math.max(1, Math.min(4, Number(wish?.quantity) || 1))
-  return Array.from({ length: quantity }, (_, i) => `${grade}-${rows[grade] || 'Q'}-${i + 5}`)
+  const grade = grades.find((g) => (SEAT_GRADES[g]?.price ?? Infinity) <= maxPrice) || grades[0] || 'S'
+  const rows = SEAT_GRADES[grade]?.rows || SEAT_GRADES.S.rows
+  const seats = []
+  for (const [row, n] of Object.entries(rows)) {
+    for (let i = 1; i <= n; i++) seats.push(`${grade}-${row}-${i}`)
+  }
+  return seats
 }
 
 function totalLeft(r) {
