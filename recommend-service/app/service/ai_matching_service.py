@@ -116,12 +116,8 @@ ACCEPTANCE_SYSTEM_PROMPT = """너는 공연 예매 취소표 매칭 시스템의
 - 0.3~0.5: 선호와 어긋나고 어조도 단호해 거절 가능성이 있음
 - 0.0~0.2: 사실상 거절할 것으로 보임
 
-각 대기자마다 사람이 읽을 한국어 한 문장 이유(reason)도 함께 낸다.
-이유는 대기자의 원문과 좌석 정보에 실제로 있는 사실만 근거로 삼는다. 지어내지 마라.
-순번은 언급하지 마라(순번은 코드가 따로 가산한다).
-
 JSON만 출력한다. 형식:
-{"results": [{"user_id": 3, "score": 0.8, "reason": "..."}]}"""
+{"results": [{"user_id": 3, "score": 0.8}]}"""
 
 ACCEPTANCE_USER_TEMPLATE = """제안 좌석: {seats_text}
 좌석 구성: {seats_shape}
@@ -522,88 +518,27 @@ async def estimate_acceptance(seats: List[str], waiters: List[dict]) -> dict:
 
 
 async def compose_offer_message(seats: List[str], waiter: dict) -> str:
-    """③-b 대기자에게 보낼 안내문 2~3문장을 생성한다.
+    """대기자에게 보낼 안내문.
 
-    폴백: 템플릿 문자열
+    MVP 프론트에는 AI 설명문이 필요하지 않으므로 LLM을 호출하지 않는다.
+    좌석 배정 결과와 결제 제한 시간만 담은 고정 템플릿을 내려준다.
     """
-    fallback = fallback_message(seats)
-
-    content = await _call_llm(
-        MESSAGE_SYSTEM_PROMPT,
-        MESSAGE_USER_TEMPLATE.format(
-            seats_text=describe_seats(seats),
-            seats_shape=_seats_shape(seats),
-            count=len(seats),
-            raw_text=waiter.get("raw_text", ""),
-            required=waiter.get("required") or {},
-            preferred=waiter.get("preferred") or {},
-            flexible=waiter.get("flexible") or {},
-        ),
-        json_mode=False,
-        max_tokens=300,
-    )
-    if content is None or not content.strip():
-        return fallback
-    return content.strip()
+    return fallback_message(seats)
 
 
 async def decide_batch_plan(plans: List[dict], waiters: List[dict]) -> tuple:
-    """③-c 대량 배분에서 상위 후보안 중 하나를 고르고 이유를 만든다.
+    """③-c 대량 배분에서 최종 배분안을 고른다.
 
-    plans는 이미 만족인원·순번합으로 정렬돼 있으므로 폴백은 plans[0]이다.
+    plans는 이미 만족인원·순번합으로 정렬돼 있다.
+    MVP에서는 AI 설명이 필요하지 않으므로 LLM을 호출하지 않고 plans[0]을 사용한다.
     반환: (선택된 plan, 이유 문자열)
     """
     if not plans:
         return None, ""
 
-    fallback = (plans[0], fallback_batch_reason(plans[0]))
-
-    seats = sorted({s for p in plans for a in p["assignments"] for s in a["seats"]})
-    by_id = {w["user_id"]: w for w in waiters}
-
-    plans_text_lines = []
-    for index, plan in enumerate(plans):
-        detail = ", ".join(
-            f"user_id={a['user_id']}→{a['seats']}" for a in plan["assignments"]
-        )
-        plans_text_lines.append(
-            f"[{index}] satisfied={plan['satisfied']} seq_sum={plan['seq_sum']} :: {detail}"
-        )
-
-    involved = [by_id[uid] for uid in sorted({
-        a["user_id"] for p in plans for a in p["assignments"] if a["user_id"] in by_id
-    })]
-
-    content = await _call_llm(
-        BATCH_SYSTEM_PROMPT,
-        BATCH_USER_TEMPLATE.format(
-            seats_text=describe_seats(seats),
-            waiters_text="\n".join(_waiter_brief(w) for w in involved),
-            plans_text="\n".join(plans_text_lines),
-        ),
-        max_tokens=600,
+    chosen = plans[0]
+    logger.info(
+        f"[Matching] 규칙 기반 대량 배분안 선택 - satisfied: {chosen['satisfied']}, "
+        f"seq_sum: {chosen['seq_sum']}"
     )
-    if content is None:
-        return fallback
-
-    try:
-        data = json.loads(strip_fence(content))
-        index = _as_int(data.get("plan_index"))
-        if index is None or not (0 <= index < len(plans)):
-            raise ValueError(f"plan_index 범위 밖: {index}")
-    except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
-        logger.warning(f"[AI] 배분안 선택 응답 해석 실패 - 폴백 사용: {e}")
-        return fallback
-
-    chosen = plans[index]
-    # LLM이 1순위(만족 인원 최대)를 어기면 무시한다. 이 우선순위는 판단이 아니라 규칙이다.
-    if chosen["satisfied"] < plans[0]["satisfied"]:
-        logger.warning(
-            f"[AI] LLM이 만족 인원이 적은 안을 골라 폴백 사용 "
-            f"({chosen['satisfied']} < {plans[0]['satisfied']})"
-        )
-        return fallback
-
-    reason = str(data.get("reason") or "").strip() or fallback_batch_reason(chosen)
-    logger.info(f"[AI] 배분안 선택 완료 - index: {index}, satisfied: {chosen['satisfied']}")
-    return chosen, reason
+    return chosen, fallback_batch_reason(chosen)

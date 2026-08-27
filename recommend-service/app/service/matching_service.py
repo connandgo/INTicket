@@ -355,7 +355,7 @@ async def _single_offer(course_id: int, seats: List[str], waiters: List[dict]) -
 
 
 def _explain_single_pick(waiter: dict, scored_entry: dict, all_waiters: List[dict]) -> str:
-    """선정 이유. AI가 준 수락가능성 근거에 점수 계산 내역을 붙인다.
+    """선정 이유. 프론트 디버깅용으로 점수 계산 내역만 붙인다.
 
     "왜 순번 1번이 아닌가"가 이 기능의 핵심이므로 밀린 순번을 반드시 언급한다.
     """
@@ -366,10 +366,6 @@ def _explain_single_pick(waiter: dict, scored_entry: dict, all_waiters: List[dic
             f" 앞 순번({', '.join(str(s) for s in skipped)}번)은 "
             f"필수 조건 불일치 또는 점수 미달로 제외됐습니다."
         )
-
-    ai_reason = (scored_entry.get("acceptance_reason") or "").strip()
-    if ai_reason:
-        head += f" {ai_reason}"
 
     return (
         f"{head} (수락가능성 {scored_entry['acceptance']} × {ACCEPTANCE_WEIGHT} + "
@@ -424,5 +420,4 @@ async def _batch_allocate(course_id: int, seats: List[str], waiters: List[dict])
             for p in plans[:BATCH_CANDIDATE_TOP_N]
         ],
     }
-
 
