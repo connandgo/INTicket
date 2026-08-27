@@ -157,80 +157,76 @@ const waitErr = ref('')
 const registered = ref(null)   // 등록 결과 { waitlistId, seq, parsed, buckets }
 const releasing = ref(false)
 const checking = ref(false)
+const paying = ref(false)
 const matchedNote = ref('')
 const modal = ref(null)        // { offer } | { offer: null }
-// 발표 시연에서는 알림을 기다리지 않고, 방금 실행한 매칭 결과를 바로 보여준다.
-// 서버가 다른 대기자를 선택하거나 제안 조회가 비어 있어도 화면 흐름이 끊기지 않게
-// 프론트에 마지막 시연 결과를 잠시 보관한다.
-const latestMatchOffer = ref(null)
-
-// 취소표 매칭을 실행한다. 결과는 바로 띄우지 않고 '결과보기'에서 확인한다.
-// 실제 서비스에서는 취소가 일어날 때 서버가 알아서 돌린다.
+// 취소표 매칭을 실행한다. 결과는 '결과보기'에서 확인한다.
+//
+// ⚠️ internal/released 의 응답에는 다른 대기자에게 나간 제안도 섞여 있다.
+// 그걸 그대로 화면에 쓰면 남의 배정 정보가 노출된다. 응답은 성공 여부만 보고,
+// 화면에 띄우는 좌석은 반드시 offers/my 로 다시 받아 온다.
 async function runMatching() {
   releasing.value = true
   matchedNote.value = ''
   modal.value = null
-  const seats = pickSeats()
   try {
-    const result = await matchingDemoApi.release(route.params.id, seats)
-    latestMatchOffer.value = result?.offers?.[0] || makeDemoOffer(seats, result?.reason)
+    await matchingDemoApi.release(route.params.id, pickSeats())
     matchedNote.value = '매칭을 실행했습니다. 결과보기를 눌러 확인하세요.'
   } catch (e) {
     console.error('[매칭] 실행 실패:', e)
-    // 백엔드 알림 연결 상태와 무관하게 발표용 화면은 끝까지 시연할 수 있게 한다.
-    latestMatchOffer.value = makeDemoOffer(seats)
-    matchedNote.value = '매칭 결과를 준비했습니다. 결과보기를 눌러 확인하세요.'
+    matchedNote.value = '매칭을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     releasing.value = false
   }
 }
 
-// 내게 배정된 좌석이 있는지 확인해 팝업으로 보여준다.
+// 지금 로그인한 사용자에게 배정된 좌석만 조회해 팝업으로 보여준다.
 async function showResult() {
   checking.value = true
   try {
+    // 서버가 매칭을 끝낼 시간을 준다
+    await new Promise((r) => setTimeout(r, 3000))
     const offers = await seatWishApi.myOffers()
     const mine = offers.find(
-      (o) => String(o.courseId) === String(route.params.id) && (!o.status || o.status === 'PENDING')
+      (o) => String(o.courseId) === String(route.params.id) && o.status === 'PENDING'
     )
-    modal.value = { offer: mine || latestMatchOffer.value || makeDemoOffer(pickSeats()) }
+    modal.value = { offer: mine || null }
   } catch (e) {
     console.error('[매칭] 결과 조회 실패:', e)
-    modal.value = { offer: latestMatchOffer.value || makeDemoOffer(pickSeats()) }
+    modal.value = { offer: null }
   } finally {
     checking.value = false
   }
 }
 
-function makeDemoOffer(seats, reason = '') {
-  return {
-    offerId: `demo-${Date.now()}`,
-    courseId: Number(route.params.id),
-    seats,
-    seatsText: seatsLabel(seats),
-    message: '요청하신 조건에 맞는 취소표를 찾았습니다.',
-    reason: reason || '희망 좌석 등급과 매수를 기준으로 가장 적합한 좌석을 배정했습니다.',
-    expiresAt: Date.now() / 1000 + 600,
-    status: 'PENDING',
-    demo: true
-  }
-}
-
-// 풀린 좌석을 고른다. 희망 등급 순서를 따르되 가격 상한을 넘는 등급은 건너뛴다.
+// 풀린 좌석을 고른다. 신청 조건의 등급을 우선 쓰고, 없으면 S등급으로 둔다.
 function pickSeats() {
-  const grades = wish.value?.grades?.length ? wish.value.grades : ['S']
-  const prices = { VIP: 240000, R: 150000, S: 102000, A: 68000 }
-  const maxPrice = Number(wish.value?.maxPrice) || Infinity
-  const g = grades.find((grade) => prices[grade] <= maxPrice) || grades[0] || 'S'
-  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'S' }
+  const g = wish.value?.grades?.[0] || 'S'
+  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'T' }
   const row = rows[g] || 'Q'
   const n = wish.value?.quantity || 1
   return Array.from({ length: n }, (_, i) => `${g}-${row}-${i + 5}`)
 }
 
-function goPay() {
-  modal.value = null
-  router.push(`/courses/${route.params.id}/booking?round=${round.value.id}`)
+async function goPay() {
+  const offer = modal.value?.offer
+  if (!offer) return
+  paying.value = true
+  try {
+    // 서버에 수락을 알리고 나서 결제 화면으로 넘어간다.
+    const r = await seatWishApi.acceptOffer(offer.offerId)
+    if (r && r.success === false) {
+      matchedNote.value = r.message || '제안을 수락하지 못했습니다.'
+      return
+    }
+    modal.value = null
+    router.push(`/courses/${route.params.id}/booking?round=${round.value.id}`)
+  } catch (e) {
+    console.error('[매칭] 수락 실패:', e)
+    matchedNote.value = '제안을 수락하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    paying.value = false
+  }
 }
 const myWait = computed(() => registered.value)
 

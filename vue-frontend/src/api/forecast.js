@@ -45,6 +45,9 @@ import * as model from '@/lib/demandModel.js'
 // ────────────────────────────────────────────────────────
 
 // 스텁 응답인지 판별한다. 실제 분석 결과에는 excessDemand 가 있다.
+//
+// aiEnabled 가 false 여도 서버가 폴백으로 계산한 정식 결과다. 오류가 아니므로
+// 그대로 화면에 쓴다. 판단 기준은 오직 excessDemand 존재 여부다.
 function isStub(d) {
   return !d || typeof d !== 'object' || !d.excessDemand
 }
@@ -68,9 +71,24 @@ export const forecastApi = {
     return model.analyze(course, waitingCount)
   },
 
-  // 기획사가 조건을 직접 넣어 돌려보는 시뮬레이션.
-  // AI 서비스가 생기면 POST .../simulate 로 바꾸면 된다.
-  async simulate(course, analysis, input) {
-    return model.simulate(course, analysis, input)
+  /**
+   * 추가 회차 시뮬레이션.
+   * POST /api/recommend/forecast/{courseId}/simulate  { date, time, capacity }
+   *   → { day, dayLabel, time, expectedAudience, expectedSeats, capacity,
+   *       expectedRate, conversionRate, verdict, comment, aiEnabled }
+   */
+  async simulate(course, analysis, { date, time, capacity }) {
+    try {
+      const res = await api.post(`/api/recommend/forecast/${course.id}/simulate`, {
+        date,
+        time,
+        capacity: Number(capacity)
+      })
+      const d = unwrap(res)
+      if (d && typeof d.expectedAudience === 'number') return { ...d, source: 'AI_SERVICE' }
+    } catch (e) {
+      console.warn('[forecast] 시뮬레이션 응답을 받지 못해 로컬 추정으로 표시합니다:', e?.response?.status || e)
+    }
+    return model.simulate(course, analysis, { seats: capacity })
   }
 }

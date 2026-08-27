@@ -16,8 +16,9 @@
         <div class="result-copy success">
           <span class="mark">✓</span>
           <div>
-            <b>{{ seatsLabel(offer.seats) }}</b>
-            <p>{{ offer.reason || reason || '등록한 희망사항과 가장 가까운 취소 좌석입니다.' }}</p>
+            <b>{{ offer.seatsText || seatsLabel(offer.seats) }}</b>
+            <!-- AI 선정 이유는 표시하지 않는다(지침). 배정된 좌석만 알린다. -->
+            <p>10분 내 결제 시 예매가 확정됩니다.</p>
           </div>
         </div>
 
@@ -43,7 +44,7 @@
           <span class="mark">!</span>
           <div>
             <b>조건에 맞는 취소표가 없습니다.</b>
-            <p>{{ reason || '다른 좌석이 발생하면 다시 매칭해 주세요.' }}</p>
+            <p>다른 좌석이 발생하면 다시 매칭해 주세요.</p>
           </div>
         </div>
         <div class="actions">
