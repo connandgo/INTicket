@@ -107,6 +107,7 @@ import PosterArt from '@/components/PosterArt.vue'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
 import { useWaitlistStore, WAIT_LABEL, WAIT_STYLE } from '@/store/waitlist.js'
 import { useCourseStore } from '@/store/course.js'
+import { isNotDeployed } from '@/domain/soldout.js'
 import { bookingApi } from '@/api/booking.js'
 import { genreLabel } from '@/domain/genre.js'
 
@@ -133,10 +134,15 @@ async function doCancel(e) {
     confirming.value = null
   } catch (err) {
     console.error('[enrollment] 취소 실패:', err)
-    cancelErr.value =
-      err.response?.status === 403
-        ? '본인의 예매만 취소할 수 있습니다.'
-        : err.response?.data?.message || '예매를 취소하지 못했습니다.'
+    if (err.response?.status === 403) {
+      cancelErr.value = '본인의 예매만 취소할 수 있습니다.'
+    } else if (isNotDeployed(err)) {
+      cancelErr.value =
+        '이 서버에는 아직 예매 취소 기능이 배포되지 않았습니다. ' +
+        '백엔드 컨테이너를 최신 소스로 다시 빌드해야 동작합니다.'
+    } else {
+      cancelErr.value = err.response?.data?.message || '예매를 취소하지 못했습니다.'
+    }
   } finally {
     busy.value = null
   }

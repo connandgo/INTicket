@@ -35,3 +35,11 @@ export function isNotSoldOutError(e) {
   const msg = e?.response?.data?.message || ''
   return e?.response?.status === 400 && msg.includes('매진되지 않은')
 }
+
+// 서버에 아직 그 기능이 배포되지 않은 경우.
+// 소스에는 있는데 컨테이너가 옛 이미지로 돌고 있으면 404/405/500 이 온다.
+// 사용자에게 '서버 오류'라고만 말하면 원인을 알 수 없어서 따로 구분한다.
+export function isNotDeployed(e) {
+  const st = e?.response?.status
+  return st === 404 || st === 405 || st === 501 || st === 500
+}

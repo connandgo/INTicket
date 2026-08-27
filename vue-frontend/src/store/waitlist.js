@@ -20,6 +20,8 @@ export const useWaitlistStore = defineStore('waitlist', () => {
   const items = ref([])
   const loading = ref(false)
   const error = ref(null)
+  // 이 서버에 취소표 대기 기능이 배포되어 있는지
+  const available = ref(true)
 
   const waitingCourseIds = computed(
     () => new Set(items.value.filter((w) => w.status === 'WAITING').map((w) => w.courseId))
@@ -33,8 +35,15 @@ export const useWaitlistStore = defineStore('waitlist', () => {
       const list = unwrap(await waitlistApi.mine())
       items.value = Array.isArray(list) ? list : []
     } catch (e) {
-      console.error('[waitlist] 대기 목록 조회 실패:', e)
-      error.value = e.response?.data?.message || '대기 내역을 불러오지 못했습니다.'
+      // 서버에 대기 기능이 아직 배포되지 않았으면 조용히 비워 둔다.
+      // 없는 기능 때문에 내 예매 화면에 오류 배너가 뜨면 안 된다.
+      const st = e.response?.status
+      if (st === 404 || st === 405 || st === 500) {
+        available.value = false
+      } else {
+        console.error('[waitlist] 대기 목록 조회 실패:', e)
+        error.value = e.response?.data?.message || '대기 내역을 불러오지 못했습니다.'
+      }
       items.value = []
     } finally {
       loading.value = false
@@ -74,7 +83,7 @@ export const useWaitlistStore = defineStore('waitlist', () => {
   }
 
   return {
-    items, loading, error,
+    items, loading, error, available,
     waitingCourseIds, hasWaiting,
     fetchMine, register, findByCourse, startPolling, stopPolling
   }
