@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { enrollmentApi } from '@/api/enrollment.js'
 import { bookingApi } from '@/api/booking.js'
+import { DEMO } from '@/config/features.js'
 
 function unwrap(res) {
   const d = res?.data
@@ -55,14 +56,13 @@ export const useEnrollmentStore = defineStore('enrollment', () => {
     return created
   }
 
-  // 예매 취소. 서버에서 지우고, 회차·등급 재고(아직 프론트에 있음)도 되돌린다.
+  // 실서버는 예매 취소와 동시에 선점 좌석·결제 상태를 원자적으로 되돌린다.
+  // 백엔드가 없는 데모 모드에서만 브라우저 재고를 직접 복구한다.
   async function cancel(enrollment) {
     await enrollmentApi.cancel(enrollment.id)
 
-    // 예매할 때 브라우저에 붙여 둔 회차·등급·매수로 잔여 수량을 복구한다.
-    // booking-service가 생기면 서버가 알아서 하므로 이 블록은 사라진다.
-    const d = bookingApi.detailOf(enrollment.id)
-    if (d) {
+    const d = DEMO ? bookingApi.detailOf(enrollment.id) : null
+    if (DEMO && d) {
       try {
         await bookingApi.release(d.courseId, d.roundId, d.grade, d.quantity)
       } catch (e) {

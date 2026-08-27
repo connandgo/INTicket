@@ -5,6 +5,12 @@
     <main class="narrow page">
       <div v-if="loading" class="load"><span class="spin"></span>예매 정보를 불러오는 중입니다</div>
 
+      <div v-else-if="loadError" class="blank">
+        <h3>예매 정보를 불러오지 못했습니다</h3>
+        <p>{{ loadError }}</p>
+        <button class="btn btn-line btn-sm retry" @click="loadBooking">다시 시도</button>
+      </div>
+
       <div v-else-if="!c || !round" class="blank">
         <h3>회차를 찾을 수 없습니다</h3>
         <p>이미 종료되었거나 잘못된 주소입니다.</p>
@@ -14,9 +20,9 @@
       <template v-else>
         <!-- 단계 -->
         <ol class="steps">
-          <li :class="{ on: step === 1, done: step > 1 }"><span class="num">1</span>좌석 등급</li>
-          <li :class="{ on: step === 2, done: step > 2 }"><span class="num">2</span>선점 · 결제</li>
-          <li :class="{ on: step === 3 }"><span class="num">3</span>완료</li>
+          <li :class="{ on: step === 1, done: step > 1 }" :aria-current="step === 1 ? 'step' : undefined"><span class="num">1</span>좌석 등급</li>
+          <li :class="{ on: step === 2, done: step > 2 }" :aria-current="step === 2 ? 'step' : undefined"><span class="num">2</span>선점 · 결제</li>
+          <li :class="{ on: step === 3 }" :aria-current="step === 3 ? 'step' : undefined"><span class="num">3</span>완료</li>
         </ol>
 
         <!-- 공연 요약 -->
@@ -25,7 +31,7 @@
           <div>
             <span class="bdg bdg-gray">{{ label }}</span>
             <h1 class="sm-ttl">{{ c.title }}</h1>
-            <p class="sm-when num">{{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ round.time }}</p>
+            <p class="sm-when num">{{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ shortTime(round.time) }}</p>
           </div>
         </section>
 
@@ -118,7 +124,7 @@
           </p>
           <dl class="dl">
             <div><dt>공연</dt><dd>{{ c.title }}</dd></div>
-            <div><dt>회차</dt><dd class="num">{{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ round.time }}</dd></div>
+            <div><dt>회차</dt><dd class="num">{{ round.date.replaceAll('-', '.') }} ({{ round.weekday }}) {{ shortTime(round.time) }}</dd></div>
             <div><dt>좌석</dt><dd>{{ held.grade }}석 <span class="num">{{ held.quantity }}매</span></dd></div>
             <div><dt>결제 금액</dt><dd class="num">{{ held.amount.toLocaleString() }}원</dd></div>
           </dl>
@@ -153,6 +159,7 @@ const label = computed(() => genreLabel(c.value?.category))
 
 const round = ref(null)
 const loading = ref(true)
+const loadError = ref('')
 
 const step = ref(1)
 const grade = ref('')
@@ -164,6 +171,10 @@ const paying = ref(false)
 
 const picked = computed(() => round.value?.grades.find((g) => g.grade === grade.value) || null)
 
+function shortTime(value) {
+  return String(value || '').slice(0, 5)
+}
+
 /* 선점 카운트다운 */
 const left = ref(0)
 let ticker = null
@@ -172,7 +183,7 @@ function startTimer(expiresAt) {
   stopTimer()
   const end = new Date(expiresAt).getTime()
   const tick = () => {
-    left.value = Math.max(0, Math.round((end - Date.now()) / 1000))
+    left.value = Math.max(0, Math.ceil((end - Date.now()) / 1000))
     if (left.value === 0) expire()
   }
   tick()
@@ -188,11 +199,26 @@ const mmss = computed(() => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
-onMounted(async () => {
-  await store.fetchCourse(route.params.id)
-  if (c.value) round.value = await performanceApi.round(c.value, route.query.round)
-  loading.value = false
-})
+async function loadBooking() {
+  loading.value = true
+  loadError.value = ''
+  round.value = null
+  try {
+    await store.fetchCourse(route.params.id)
+    if (!c.value) {
+      loadError.value = store.error || '공연을 찾을 수 없습니다.'
+      return
+    }
+    round.value = await performanceApi.round(c.value, route.query.round)
+  } catch (e) {
+    console.error('[booking] 예매 정보 조회 실패:', e)
+    loadError.value = e.response?.data?.message || '잠시 후 다시 시도해 주세요.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadBooking)
 
 onBeforeUnmount(() => {
   stopTimer()
@@ -225,8 +251,10 @@ async function doHold() {
     startTimer(held.value.expiresAt)
   } catch (e) {
     console.error('[booking] 선점 실패:', e)
-    err.value = e.message || '좌석을 선점하지 못했습니다.'
-    round.value = await performanceApi.round(c.value, route.query.round)
+    err.value = e.response?.data?.message || '좌석을 선점하지 못했습니다. 잔여 좌석을 다시 확인해 주세요.'
+    try {
+      round.value = await performanceApi.round(c.value, route.query.round)
+    } catch { /* 기존 화면의 마지막 잔여 좌석 정보를 유지한다. */ }
   } finally {
     holding.value = false
   }
@@ -235,6 +263,7 @@ async function doHold() {
 function releaseHeld() {
   if (!held.value) return
   bookingApi.release(c.value.id, round.value.id, held.value.grade, held.value.quantity, held.value.holdId)
+    .catch((e) => console.warn('[booking] 선점 해제 실패:', e))
 }
 
 function expire() {
@@ -295,6 +324,7 @@ async function doPay() {
 
 <style scoped>
 .steps { display: flex; gap: 6px; margin-bottom: 26px; }
+.retry { margin-top: 14px; }
 .steps li {
   flex: 1;
   display: flex; align-items: center; gap: 8px;

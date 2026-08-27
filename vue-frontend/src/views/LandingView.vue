@@ -18,9 +18,11 @@
           </div>
         </div>
 
-        <ul class="hero-tiles" aria-hidden="true">
-          <li v-for="(g, i) in GENRES" :key="g.code" :class="'tile t' + i">
-            <span>{{ g.label }}</span>
+        <ul class="hero-tiles" aria-label="추천 공연 미리보기">
+          <li v-for="c in heroCourses" :key="c.id" class="tile">
+            <router-link :to="`/courses/${c.id}`" :aria-label="`${c.title} 상세 보기`">
+              <PosterArt :id="c.id" :title="c.title" :genre="genreLabel(c.category)" />
+            </router-link>
           </li>
         </ul>
       </div>
@@ -31,9 +33,8 @@
       <router-link
         v-for="g in GENRES"
         :key="g.code"
-        to="/courses"
+        :to="{ name: 'CourseList', query: { genre: g.code } }"
         class="qk-i"
-        @click="pick(g.code)"
       >
         <span class="qk-l">{{ g.label }}</span>
         <span class="qk-a">›</span>
@@ -44,13 +45,12 @@
     <section class="wrap rank">
       <h2 class="stitle">인기 공연</h2>
 
-      <div v-if="store.needsLogin" class="blank">
-        <h3>로그인하면 인기 공연을 볼 수 있습니다</h3>
-        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
-        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
-      </div>
+      <p v-if="store.isShowcase" class="preview-note">
+        <span class="bdg bdg-gray">둘러보기</span>
+        로그인 전에는 발표용 공연을 미리 보여드립니다. 로그인하면 실시간 예매 현황으로 전환됩니다.
+      </p>
 
-      <div v-else-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
+      <div v-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
 
       <div v-else-if="store.error" class="blank">
         <h3>공연을 불러오지 못했습니다</h3>
@@ -80,18 +80,17 @@
 import { computed, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import CourseCard from '@/components/CourseCard.vue'
+import PosterArt from '@/components/PosterArt.vue'
 import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
-import { GENRES } from '@/domain/genre.js'
+import { GENRES, genreLabel } from '@/domain/genre.js'
+import { SHOWCASE } from '@/data/showcase.js'
 
 const auth = useAuthStore()
 const store = useCourseStore()
 
 const top = computed(() => store.ranked.slice(0, 5))
-
-function pick(code) {
-  store.setGenre(code)
-}
+const heroCourses = computed(() => (top.value.length ? top.value : SHOWCASE).slice(0, 4))
 
 // 로그인 없이도 인기 공연은 보여 준다. 예매 단계에서만 로그인을 요구한다.
 onMounted(() => store.fetchCourses())
@@ -107,22 +106,17 @@ onMounted(() => store.fetchCourses())
 .hbtn .btn-line { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
 .hbtn .btn-line:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.6); }
 
-/* 장식용 포스터 타일 */
+/* 실제 상세 페이지로 연결되는 포스터 미리보기 */
 .hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tile {
   aspect-ratio: 3 / 4;
   border-radius: var(--r);
-  display: grid;
-  place-items: end start;
-  padding: 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: rgba(255,255,255,.85);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
 }
-.t0 { background: linear-gradient(160deg,#7A1F2B,#B33A49); }
-.t1 { background: linear-gradient(160deg,#123B33,#276B5C); }
-.t2 { background: linear-gradient(160deg,#3A2352,#61407F); }
-.t3 { background: linear-gradient(160deg,#14324F,#2A5C86); }
+.tile a { display: block; height: 100%; }
+.tile :deep(.poster) { transition: transform .22s var(--ease); }
+.tile a:hover :deep(.poster) { transform: scale(1.025); }
 
 .qk { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 34px auto 46px; }
 .qk-i {
@@ -137,6 +131,10 @@ onMounted(() => store.fetchCourses())
 .qk-a { color: var(--t4); font-size: 17px; }
 
 .rank { padding-bottom: 70px; }
+.preview-note {
+  display: flex; align-items: center; gap: 9px;
+  margin: -3px 0 16px; color: var(--t2); font-size: 12.5px;
+}
 .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
 
 .ft { border-top: 1px solid var(--line); background: var(--bg-soft); }
@@ -149,5 +147,6 @@ onMounted(() => store.fetchCourses())
   .hh { font-size: 27px; }
   .qk { grid-template-columns: repeat(2, 1fr); }
   .grid { grid-template-columns: repeat(2, 1fr); }
+  .preview-note { align-items: flex-start; line-height: 1.6; }
 }
 </style>

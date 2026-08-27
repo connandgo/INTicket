@@ -20,9 +20,6 @@ function fail(config, message, status = 400) {
   return Promise.reject(err)
 }
 
-// FastAPI 추천은 래퍼가 없다
-const raw = (config, data) => ({ data, status: 200, statusText: 'OK', headers: {}, config })
-
 const delay = (ms = 180) => new Promise((r) => setTimeout(r, ms))
 
 function currentUser(config) {
@@ -150,7 +147,8 @@ export default async function mockAdapter(config) {
       courseId: course.id,
       status: 'PENDING',
       createdAt: new Date().toISOString(),
-      course: null
+      course: null,
+      booking: body.booking || null
     }
     db.enrollments.push(e)
     write(db)
@@ -162,7 +160,7 @@ export default async function mockAdapter(config) {
       if (t && t.status === 'PENDING') {
         t.status = 'ACTIVE'
         const c = d.courses.find((x) => x.id === t.courseId)
-        if (c) c.enrollmentCount += 1
+        if (c) c.enrollmentCount += Number(t.booking?.quantity || 1)
         write(d)
       }
     }, 900)
@@ -203,7 +201,7 @@ export default async function mockAdapter(config) {
     // ACTIVE였을 때만 예매 수를 되돌린다(PENDING은 애초에 올라간 적이 없다)
     if (e.status === 'ACTIVE') {
       const c = db.courses.find((x) => x.id === e.courseId)
-      if (c) c.enrollmentCount = Math.max(0, c.enrollmentCount - 1)
+      if (c) c.enrollmentCount = Math.max(0, c.enrollmentCount - Number(e.booking?.quantity || 1))
     }
     e.status = 'CANCELLED'
 
@@ -244,35 +242,6 @@ export default async function mockAdapter(config) {
   if (url === '/api/enrollments/waitlist/my' && method === 'get') {
     if (!me) return fail(config, '인증이 필요합니다', 401)
     return ok(config, db.waitlist.filter((w) => w.userId === me.id).sort((a, b) => b.id - a.id))
-  }
-
-  /* ---------- 추천 (FastAPI, 래퍼 없음) ---------- */
-  m = url.match(/^\/api\/recommend\/(\d+)$/)
-  if (m && method === 'get') {
-    const uid = Number(m[1])
-    const mine = db.enrollments.filter((e) => e.userId === uid && e.status === 'ACTIVE')
-    const bookedIds = new Set(mine.map((e) => e.courseId))
-
-    if (!mine.length) {
-      return raw(config, {
-        userId: uid,
-        recommendedCourses: [...db.courses].sort((a, b) => b.enrollmentCount - a.enrollmentCount).slice(0, 4),
-        basedOnCategory: null,
-        message: '인기 공연 추천입니다'
-      })
-    }
-
-    const lastCourse = db.courses.find((c) => c.id === mine[mine.length - 1].courseId)
-    const cat = lastCourse?.category ?? null
-    return raw(config, {
-      userId: uid,
-      recommendedCourses: db.courses
-        .filter((c) => c.category === cat && !bookedIds.has(c.id))
-        .sort((a, b) => b.enrollmentCount - a.enrollmentCount)
-        .slice(0, 4),
-      basedOnCategory: cat,
-      message: `${cat} 장르 기반 추천 공연입니다`
-    })
   }
 
   return fail(config, `데모 모드에서 지원하지 않는 요청입니다: ${method.toUpperCase()} ${url}`, 404)

@@ -7,7 +7,7 @@
 | 포트 | 서비스 | 책임 |
 |---:|---|---|
 | 3000 | Vue frontend | 공연 탐색, 회차·등급 선택, 예매, 취소표 대기, 마이페이지 |
-| 8080 | API Gateway | 외부 API 단일 진입점, JWT 검증·사용자 헤더 전달 |
+| 8080 | API Edge + Gateway | 외부 API 단일 진입점, 로그인 화면 스타일, JWT 검증·사용자 헤더 전달 |
 | 8081 | user-service | 회원가입, 사용자 프로필, 역할(`STUDENT`, `INSTRUCTOR`) |
 | 8082 | course-service | 공연 카탈로그, 회차, 좌석 등급별 가격·재고, 판매 현황 |
 | 8083 | enrollment-service | 10분 좌석 선점, 예매, 취소, 취소표 대기·자동 매칭 |
@@ -51,11 +51,13 @@ docker compose build && docker compose up -d
 | 관람객 | `student@lecture.com` | `password1234` | 예매 내역, 취소 내역, 매진 공연 대기 |
 | 공연기획사 | `instructor@lecture.com` | `password1234` | 등록 공연 7개, 회차별 판매율 |
 
-GitHub `develop`의 실제 HEAD `2475aae`를 확인해 프론트 계약을 다시 대조했습니다. 해당 변경의 AI 수요분석·AI 좌석매칭은 요청 범위에서 제외하고, 비-AI 로그아웃/메뉴 개선과 공연·회차·예매 화면 계약만 반영했습니다. 따라서 8085 추천 서비스는 Compose 실행 대상에 포함하지 않습니다.
+GitHub `develop`의 실제 HEAD `7b977d0`을 확인해 프론트 계약을 다시 대조했습니다. 최신 비로그인 공연 둘러보기와 메뉴 개선은 반영하고, AI 수요분석·AI 좌석매칭은 요청 범위에서 제외했습니다. 따라서 8085 추천 서비스는 Compose 실행 대상에 포함하지 않습니다.
 
 ## 인증에 대한 결정
 
 여기서 OAuth2/OIDC는 카카오·구글 같은 소셜 로그인을 뜻하지 않습니다. 현재 프론트와 기존 Gateway가 Authorization Code 및 JWT 계약을 이미 사용하므로 9000번 자체 인증 서버를 유지했습니다. 즉, 사용자는 INTicket의 이메일·비밀번호로 로그인하고 Auth Server는 토큰 발급 역할만 합니다. MSA 자체 때문에 OAuth가 필수인 것은 아니지만, 이 프로젝트에서는 Gateway 계약을 최소 변경으로 유지하기 위한 내부 인증 방식입니다.
+
+8080의 `api-edge`는 API 동작을 바꾸지 않고 원본 Auth Server의 Spring 기본 로그인 화면만 INTicket 디자인과 한글 문구로 정리합니다. 실제 인증과 토큰 발급은 기존 Gateway/Auth Server가 그대로 담당합니다.
 
 ## 주요 흐름
 

@@ -1,9 +1,10 @@
 import api from './index.js'
 import { FEATURES } from '@/config/features.js'
 import * as mock from '@/mock/inventory.js'
+import { DEMO } from '@/config/features.js'
 
-// 예매 = 기존 enrollment-service(POST /api/enrollments)로 실제 예매 건을 만들고,
-// 회차·등급·매수·선점 마감시각은 booking-service가 생기기 전까지 프론트가 들고 있는다.
+// 실서버는 enrollment-service에서 좌석 선점·예매·결제·해제를 함께 처리한다.
+// DEMO일 때만 같은 흐름을 브라우저 재고로 재현한다.
 
 function unwrap(res) {
   const d = res?.data
@@ -30,7 +31,7 @@ export function isDuplicate(e) {
 export const bookingApi = {
   // 좌석등급 선점. 잔여 수량이 즉시 줄고 결제 마감 시각을 받는다.
   async hold(course, roundId, grade, quantity) {
-    if (FEATURES.holdApi) {
+    if (FEATURES.holdApi && !DEMO) {
       return unwrap(await api.post('/api/enrollments/holds', {
         performanceId: course.id, scheduleId: roundId, grade, quantity
       }))
@@ -40,31 +41,40 @@ export const bookingApi = {
 
   // 선점분 결제 확정. 실제 예매 건은 기존 enrollment API로 만든다.
   async confirm(course, roundId, held) {
-    const created = unwrap(await api.post('/api/enrollments', {
-      courseId: Number(course.id), holdId: held.holdId
-    }))
+    const payload = { courseId: Number(course.id), holdId: held.holdId }
+    if (DEMO) {
+      payload.booking = {
+        scheduleId: roundId,
+        grade: held.grade,
+        quantity: held.quantity,
+        unitPrice: held.unitPrice,
+        amount: held.amount
+      }
+    }
+    const created = unwrap(await api.post('/api/enrollments', payload))
     // 응답은 PENDING이지만 모의 결제가 곧바로 끝나 DB는 이미 ACTIVE일 수 있다.
     // 확정 여부는 화면에서 목록을 다시 읽어 판단한다.
 
-    // 회차·등급·매수는 백엔드가 아직 모르는 정보라 브라우저에 붙여 둔다.
-    const key = String(created?.id ?? `${course.id}-${roundId}`)
-    const m = loadLocal()
-    m[key] = {
-      courseId: Number(course.id),
-      roundId,
-      grade: held.grade,
-      quantity: held.quantity,
-      unitPrice: held.unitPrice,
-      amount: held.amount,
-      at: new Date().toISOString()
+    if (DEMO) {
+      const key = String(created?.id ?? `${course.id}-${roundId}`)
+      const m = loadLocal()
+      m[key] = {
+        courseId: Number(course.id),
+        roundId,
+        grade: held.grade,
+        quantity: held.quantity,
+        unitPrice: held.unitPrice,
+        amount: held.amount,
+        at: new Date().toISOString()
+      }
+      saveLocal(m)
     }
-    saveLocal(m)
     return created
   },
 
   // 선점만 풀기(결제 안 함) — 잔여 수량 복구
   async release(courseId, roundId, grade, quantity, holdId = null) {
-    if (FEATURES.holdApi) {
+    if (FEATURES.holdApi && !DEMO) {
       return unwrap(await api.delete('/api/enrollments/holds', {
         data: { holdId, performanceId: courseId, scheduleId: roundId, grade, quantity }
       }))

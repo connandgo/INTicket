@@ -7,6 +7,13 @@ import { read as readDemoDb } from '@/mock/db.js'
 const AUTH_SERVER_URL = import.meta.env.VITE_AUTH_SERVER_URL || 'http://localhost:8080'
 // 인증 서버에 등록된 값과 정확히 일치해야 한다(끝의 / 포함).
 const POST_LOGOUT_URI = import.meta.env.VITE_POST_LOGOUT_URI || 'http://localhost:3000/'
+const REDIRECT_KEY = 'inticket.post-login-redirect'
+
+function safePath(path) {
+  return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')
+    ? path
+    : '/courses'
+}
 
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref(sessionStorage.getItem('access_token') || null)
@@ -36,7 +43,6 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchUser() {
     try {
       const res = await authApi.getMe()
-      console.log('[AuthStore] /me response =', res.data)
 
       const userData = res?.data?.data ?? res?.data
 
@@ -48,6 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       console.error('[AuthStore] 사용자 정보 조회 실패:', error)
       logout(false)
+      throw error
     }
   }
 
@@ -78,6 +85,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   function demoUsers() {
     return DEMO ? readDemoDb().users : []
+  }
+
+  function rememberRedirect(path) {
+    sessionStorage.setItem(REDIRECT_KEY, safePath(path))
+  }
+
+  function consumeRedirect() {
+    const path = safePath(sessionStorage.getItem(REDIRECT_KEY))
+    sessionStorage.removeItem(REDIRECT_KEY)
+    return path
   }
 
   // 브라우저의 HttpOnly 세션 쿠키를 만료시키고 표준 OIDC 로그아웃도 호출한다.
@@ -111,7 +128,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // OAuth2 Authorization Code Flow
-  function redirectToLogin() {
+  function redirectToLogin(returnTo) {
+    if (returnTo) rememberRedirect(returnTo)
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: import.meta.env.VITE_CLIENT_ID,
@@ -128,7 +146,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function handleCallback(code) {
     const res = await authApi.exchangeCode(code)
-    console.log('[AuthStore] token response =', res.data)
 
     const token = res?.data?.access_token
 
@@ -145,6 +162,8 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     demoLogin,
     demoUsers,
+    rememberRedirect,
+    consumeRedirect,
     clearSession,
     fullLogout,
     idToken,

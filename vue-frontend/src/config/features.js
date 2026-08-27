@@ -1,10 +1,5 @@
-// 백엔드가 아직 없는 기능은 프론트 목업으로 돌린다.
-//
-// 팀 기능명세서(Sprint1)에는 회차·좌석등급·잔여수량·선점(expiresAt)이 있는데
-// 현재 백엔드에는 courses/enrollments/payments/recommend 밖에 없다.
-// 없는 것만 목업으로 채우고, 엔드포인트가 생기면 여기 플래그만 끄면 된다.
-//
-// .env 에 VITE_API_PERFORMANCE=true 처럼 넣으면 개별로 전환된다.
+// 실서버에서는 회차·좌석 선점·대기열 API를 기본 사용한다.
+// 발표용 DEMO에서만 같은 흐름을 브라우저 목업으로 재현한다.
 const on = (key) => import.meta.env[key] === 'true'
 
 // 데모 모드 — 백엔드 없이 화면 전체를 돌린다.
@@ -52,15 +47,15 @@ export const FEATURES = {
   // 공연 목록·상세 — 기존 course-service 사용 (실제 API)
   performanceApi: true,
 
-  // 회차 / 좌석등급 / 잔여수량 — performance-service 생기면 true
+  // 회차 / 좌석등급 / 잔여수량 — course-service
   scheduleApi: import.meta.env.VITE_API_SCHEDULE !== 'false',
 
-  // 선점(HOLD) + 결제 마감 시각 — booking-service 생기면 true
+  // 선점(HOLD) + 결제 마감 시각 — enrollment-service
   holdApi: import.meta.env.VITE_API_HOLD !== 'false',
 
-  // 대기 등록 · 취소표 매칭 (Sprint2)
+  // 대기 등록 · 취소표 자동 매칭
   waitlistApi: import.meta.env.VITE_API_WAITLIST !== 'false'
 }
 
-// 선점 유지 시간(분). 명세서상 미결제 시 다음 순번으로 승계된다.
+// 선점 유지 시간(분). 결제를 마치지 않으면 재고로 자동 반환된다.
 export const HOLD_MINUTES = 10

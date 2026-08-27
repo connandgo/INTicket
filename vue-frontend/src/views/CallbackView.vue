@@ -30,25 +30,25 @@ onMounted(async () => {
   if (error) {
     console.error('OAuth callback error:', error, route.query.error_description)
     message.value = '로그인에 실패했습니다.'
-    router.replace('/login')
+    router.replace({ name: 'Login', query: { error: '로그인이 취소되었거나 인증에 실패했습니다.' } })
     return
   }
 
   if (!code) {
     console.error('OAuth callback error: code 파라미터가 없습니다.')
     message.value = '잘못된 로그인 요청입니다.'
-    router.replace('/login')
+    router.replace({ name: 'Login', query: { error: '로그인 응답에 인증 코드가 없습니다.' } })
     return
   }
 
   try {
     await auth.handleCallback(code)
     message.value = '로그인 완료. 이동합니다'
-    router.replace('/courses')
+    router.replace(auth.consumeRedirect())
   } catch (err) {
     console.error('OAuth callback 처리 실패:', err)
     message.value = '로그인 처리에 실패했습니다.'
-    router.replace('/login')
+    router.replace({ name: 'Login', query: { error: '로그인 처리에 실패했습니다. 다시 시도해 주세요.' } })
   }
 })
 </script>
@@ -59,7 +59,7 @@ onMounted(async () => {
 .mark-sq {
   width: 30px; height: 30px; display: grid; place-items: center;
   background: var(--red); color: #fff;
-  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  font-family: var(--num); font-size: 11px; font-weight: 700;
   border-radius: var(--r);
 }
 .msg { font-size: 13.5px; color: var(--t3); }

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { courseApi } from '@/api/course.js'
 import { genreLabel } from '@/domain/genre.js'
+import { DEMO } from '@/config/features.js'
+import { SHOWCASE, findShowcase } from '@/data/showcase.js'
 
 // 서버 응답이 { success, data, message } 껍데기로 오기도 하고 그냥 오기도 한다.
 function unwrap(res) {
@@ -16,9 +18,8 @@ export const useCourseStore = defineStore('course', () => {
   const loading = ref(false)
   const error = ref(null)
   let listRequest = null
-  // 실서버는 공연 목록에도 인증을 요구한다(게이트웨이 정책).
-  // 로그인 안내와 진짜 장애를 화면에서 구분하려고 따로 둔다.
-  const needsLogin = ref(false)
+  // Gateway가 비로그인 조회를 막을 때 MVP 공개 카탈로그를 표시하는 상태.
+  const isShowcase = ref(false)
 
   const genre = ref('ALL')
 
@@ -32,22 +33,40 @@ export const useCourseStore = defineStore('course', () => {
   )
 
   async function fetchCourses({ force = false } = {}) {
-    if (!force && courses.value.length) return courses.value
+    if (!force && courses.value.length) {
+      const signedInAfterPreview = isShowcase.value && sessionStorage.getItem('access_token')
+      if (!signedInAfterPreview) return courses.value
+    }
     if (listRequest) return listRequest
 
     loading.value = true
     error.value = null
-    needsLogin.value = false
+    isShowcase.value = false
+
+    // 현재 Gateway 정책을 이미 알고 있으므로 불필요한 401 요청과 콘솔 오류 없이
+    // 공개 카탈로그를 즉시 보여준다. 데모 모드는 자체 어댑터의 데이터를 사용한다.
+    if (!DEMO && !sessionStorage.getItem('access_token')) {
+      courses.value = SHOWCASE.map((course) => ({ ...course }))
+      isShowcase.value = true
+      loading.value = false
+      return courses.value
+    }
+
     listRequest = (async () => {
       try {
         const list = unwrap(await courseApi.getAll())
         courses.value = Array.isArray(list) ? list : []
+        isShowcase.value = false
         return courses.value
       } catch (e) {
         console.error('[course] 목록 조회 실패:', e)
-        if (e.response?.status === 401) needsLogin.value = true
-        else error.value = message(e, '공연 목록을 불러오지 못했습니다.')
-        courses.value = []
+        if (e.response?.status === 401) {
+          courses.value = SHOWCASE.map((course) => ({ ...course }))
+          isShowcase.value = true
+        } else {
+          error.value = message(e, '공연 목록을 불러오지 못했습니다.')
+          courses.value = []
+        }
         return courses.value
       } finally {
         loading.value = false
@@ -60,8 +79,17 @@ export const useCourseStore = defineStore('course', () => {
   async function fetchCourse(id) {
     loading.value = true
     error.value = null
-    needsLogin.value = false
+    isShowcase.value = false
     current.value = null
+
+    if (!DEMO && !sessionStorage.getItem('access_token')) {
+      current.value = findShowcase(id)
+      isShowcase.value = Boolean(current.value)
+      if (!current.value) error.value = '존재하지 않는 공연입니다.'
+      loading.value = false
+      return current.value
+    }
+
     try {
       const c = unwrap(await courseApi.getById(id))
       current.value = c && typeof c === 'object' ? c : null
@@ -69,7 +97,12 @@ export const useCourseStore = defineStore('course', () => {
     } catch (e) {
       console.error('[course] 상세 조회 실패:', e)
       // 백엔드는 없는 id에 404가 아니라 400 + "강의를 찾을 수 없습니다"로 답한다
-      if (e.response?.status === 401) { needsLogin.value = true; return }
+      if (e.response?.status === 401) {
+        current.value = findShowcase(id)
+        isShowcase.value = Boolean(current.value)
+        if (!current.value) error.value = '존재하지 않는 공연입니다.'
+        return
+      }
       const notFound = e.response?.status === 404 ||
         (e.response?.status === 400 && /찾을 수 없|존재하지 않/.test(e.response?.data?.message || ''))
       error.value = notFound
@@ -92,7 +125,7 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   return {
-    courses, current, loading, error, needsLogin, genre, visible, ranked,
+    courses, current, loading, error, isShowcase, genre, visible, ranked,
     fetchCourses, fetchCourse, create, setGenre, genreLabel
   }
 })

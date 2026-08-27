@@ -1,10 +1,7 @@
-// 회차 · 좌석등급 · 잔여수량 · 선점 상태를 브라우저에 들고 있는 임시 저장소.
+// DEMO 모드의 회차 · 좌석등급 · 잔여수량 · 선점 상태를 브라우저에 보관한다.
+// 화면 코드는 이 파일을 직접 부르지 않고 api/performance.js, api/booking.js 를 거친다.
 //
-// performance-service / booking-service 가 생기면 통째로 버릴 파일이다.
-// 그래서 화면 코드는 이 파일을 직접 부르지 않고 api/performance.js, api/booking.js 를 거친다.
-//
-// 한계는 분명하다 — 브라우저 안에서만 유효하고, 다른 사람과 재고가 공유되지 않는다.
-// 발표 시연과 화면 검증까지가 이 파일의 역할이다.
+// 브라우저 안에서만 유효하며 발표 시연과 화면 검증에 사용한다.
 
 import { HOLD_MINUTES } from '@/config/features.js'
 

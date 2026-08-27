@@ -5,12 +5,6 @@
     <main class="wrap page">
       <div v-if="store.loading" class="load"><span class="spin"></span>공연 정보를 불러오는 중입니다</div>
 
-      <div v-else-if="store.needsLogin" class="blank">
-        <h3>로그인하면 공연 정보를 볼 수 있습니다</h3>
-        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
-        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
-      </div>
-
       <div v-else-if="!c" class="blank">
         <h3>공연을 찾을 수 없습니다</h3>
         <p>{{ store.error }}</p>
@@ -41,7 +35,7 @@
                   <span v-else class="num cap-left" :class="{ few: almostGone }">잔여 {{ left }}석</span>
                 </dd>
               </div>
-              <div><dt>기획사</dt><dd class="num muted">ID {{ c.instructorId }}</dd></div>
+              <div><dt>기획사</dt><dd class="muted">INTicket 공연기획사 <span class="num">#{{ c.instructorId }}</span></dd></div>
               <div>
                 <dt>예매 상태</dt>
                 <!-- status 는 공연 자체의 활성 여부고 매진과는 별개다. 매진이면 그쪽을 먼저 알린다. -->
@@ -58,7 +52,7 @@
               </p>
 
               <template v-if="!auth.isAuthenticated">
-                <router-link to="/login" class="btn btn-red btn-wide">로그인하고 대기 걸기</router-link>
+                <router-link :to="loginForDetail" class="btn btn-red btn-wide">로그인하고 대기 걸기</router-link>
               </template>
 
               <template v-else-if="myWait">
@@ -99,15 +93,22 @@
         <section class="body">
           <h2 class="stitle">회차 선택</h2>
 
-          <!-- 실서버에 붙어 있어도 회차·좌석등급 API는 아직 없다. 화면에 숨기지 않는다. -->
-          <p v-if="!scheduleFromServer" class="alert alert-info sched-note">
-            회차와 좌석 등급은 아직 <b>프론트엔드 임시 데이터</b>입니다.
-            공연 조회·예매·결제·추천은 실제 서버와 연동되어 있습니다.
+          <p v-if="store.isShowcase" class="alert alert-info sched-note">
+            현재는 둘러보기용 공연·잔여 좌석입니다. 로그인하면 실시간 좌석을 확인하고 예매할 수 있습니다.
+          </p>
+          <p v-else-if="DEMO" class="alert alert-info sched-note">
+            발표용 데모 데이터입니다. 좌석 선점부터 결제·취소표 대기까지 직접 체험할 수 있습니다.
           </p>
 
           <div v-if="loadingRounds" class="load"><span class="spin"></span>회차를 불러오는 중입니다</div>
 
-          <div v-else-if="!rounds.length" class="blank">
+          <div v-else-if="roundsError" class="blank compact">
+            <h3>회차를 불러오지 못했습니다</h3>
+            <p>{{ roundsError }}</p>
+            <button class="btn btn-line btn-sm retry" @click="loadRounds">다시 시도</button>
+          </div>
+
+          <div v-else-if="!rounds.length" class="blank compact">
             <h3>등록된 회차가 없습니다</h3>
             <p>공연기획사가 회차를 등록하면 예매할 수 있습니다.</p>
           </div>
@@ -117,7 +118,7 @@
               <div class="rd-when">
                 <span class="rd-date num">{{ r.date.replaceAll('-', '.') }}</span>
                 <span class="rd-wd">({{ r.weekday }})</span>
-                <span class="rd-time num">{{ r.time }}</span>
+                <span class="rd-time num">{{ shortTime(r.time) }}</span>
               </div>
 
               <ul class="grades">
@@ -133,7 +134,7 @@
               <span v-if="soldOut" class="bdg bdg-red rd-go">매진</span>
               <router-link
                 v-else-if="!auth.isAuthenticated && totalLeft(r) > 0 && c.status === 'ACTIVE'"
-                to="/login"
+                :to="loginForRound(r)"
                 class="btn btn-line btn-sm rd-go"
               >로그인 후 예매</router-link>
               <router-link
@@ -178,7 +179,8 @@ import { performanceApi, remaining } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
 import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity, isNotSoldOutError } from '@/domain/soldout.js'
 import { useWaitlistStore } from '@/store/waitlist.js'
-import { HOLD_MINUTES, FEATURES } from '@/config/features.js'
+import { HOLD_MINUTES, DEMO } from '@/config/features.js'
+import { showcaseRounds } from '@/data/showcase.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -195,6 +197,10 @@ const almostGone = computed(() => isAlmostGone(c.value))
 const left = computed(() => seatsLeft(c.value))
 const hasCap = computed(() => hasCapacity(c.value))
 const myWait = computed(() => waitlist.findByCourse(route.params.id))
+const loginForDetail = computed(() => ({
+  name: 'Login',
+  query: { redirect: route.fullPath }
+}))
 
 const waiting = ref(false)
 const waitErr = ref('')
@@ -219,25 +225,45 @@ async function joinWaitlist() {
 
 const rounds = ref([])
 const loadingRounds = ref(false)
-const scheduleFromServer = FEATURES.scheduleApi
+const roundsError = ref('')
 
 function totalLeft(r) {
   return r.grades.reduce((a, g) => a + remaining(g), 0)
+}
+
+function shortTime(value) {
+  return String(value || '').slice(0, 5)
+}
+
+function loginForRound(r) {
+  return {
+    name: 'Login',
+    query: { redirect: `/courses/${c.value.id}/booking?round=${r.id}` }
+  }
+}
+
+async function loadRounds() {
+  if (!c.value) return
+  loadingRounds.value = true
+  roundsError.value = ''
+  try {
+    rounds.value = store.isShowcase
+      ? showcaseRounds(c.value.id)
+      : await performanceApi.rounds(c.value)
+  } catch (e) {
+    console.error('[detail] 회차 조회 실패:', e)
+    rounds.value = []
+    roundsError.value = e.response?.data?.message || '잠시 후 다시 시도해 주세요.'
+  } finally {
+    loadingRounds.value = false
+  }
 }
 
 onMounted(async () => {
   await store.fetchCourse(route.params.id)
   if (!c.value) return
   if (auth.isAuthenticated && isViewer.value) waitlist.fetchMine()
-  loadingRounds.value = true
-  try {
-    rounds.value = await performanceApi.rounds(c.value)
-  } catch (e) {
-    console.error('[detail] 회차 조회 실패:', e)
-    rounds.value = []
-  } finally {
-    loadingRounds.value = false
-  }
+  await loadRounds()
 })
 </script>
 
@@ -274,6 +300,8 @@ onMounted(async () => {
 
 .sched-note { margin-bottom: 14px; }
 .sched-note b { font-weight: 700; }
+.blank.compact { padding: 30px 20px; }
+.retry { margin-top: 14px; }
 
 .rounds { border-top: 2px solid var(--navy); }
 .rd {

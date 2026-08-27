@@ -7,7 +7,7 @@
 
       <p class="lead">
         등록한 공연은 바로 공연 목록에 노출되고 관람객이 예매할 수 있습니다.
-        회차와 좌석은 이번 버전에서 다루지 않으므로, 일시와 장소는 공연 소개에 적어 주세요.
+        등록한 정원을 기준으로 최대 3개 회차와 VIP·R·S·A 좌석 등급이 자동으로 만들어집니다.
       </p>
 
       <form class="form" @submit.prevent="submit">
@@ -38,12 +38,12 @@
           <label class="flabel" for="f-cap">정원</label>
           <div class="money">
             <input id="f-cap" v-model.number="form.capacity" type="number" class="inp" min="1" step="10"
-                   placeholder="비워두면 정원 무제한" />
+                   placeholder="비워두면 기본 1,560석" />
             <span class="unit">석</span>
           </div>
           <p class="fhint">
-            예매 수가 정원에 도달하면 매진되고, 그때부터 관람객이 <b>취소표 대기</b>를 걸 수 있습니다.
-            비워두면 무제한이라 매진도 대기도 생기지 않습니다.
+            좌석 등급별 수량을 계산하는 기준입니다. 비워두면 회차 재고는 기본 1,560석으로 생성됩니다.
+            전체 좌석이 매진되면 관람객이 <b>취소표 대기</b>를 걸 수 있습니다.
           </p>
         </div>
 
@@ -59,8 +59,8 @@
 
         <div class="acts">
           <router-link to="/courses" class="btn btn-line">취소</router-link>
-          <button type="submit" class="btn btn-red" :disabled="saving || !valid">
-            <span v-if="saving" class="spin spin-w"></span>{{ saving ? '등록 중' : '공연 등록' }}
+          <button type="submit" class="btn btn-red" :disabled="saving || submitted || !valid">
+            <span v-if="saving" class="spin spin-w"></span>{{ saving ? '등록 중' : submitted ? '등록 완료' : '공연 등록' }}
           </button>
         </div>
       </form>
@@ -80,6 +80,7 @@ const store = useCourseStore()
 
 const form = ref({ title: '', category: 'BACKEND', price: null, capacity: null, description: '' })
 const saving = ref(false)
+const submitted = ref(false)
 const err = ref('')
 const ok = ref('')
 
@@ -88,6 +89,7 @@ const valid = computed(
 )
 
 async function submit() {
+  if (saving.value || submitted.value) return
   saving.value = true
   err.value = ''
   ok.value = ''
@@ -97,10 +99,11 @@ async function submit() {
       description: form.value.description || null,
       category: form.value.category,
       price: form.value.price,
-      // 비워두면 정원 무제한. 백엔드가 null 을 그렇게 해석한다.
-      capacity: form.value.capacity && form.value.capacity > 0 ? form.value.capacity : null
+      // 공연 정원과 회차별 재고의 매진 판정 기준이 일치하도록 기본값을 명시한다.
+      capacity: form.value.capacity && form.value.capacity > 0 ? form.value.capacity : 1560
     })
     ok.value = '공연이 등록되었습니다. 공연 상세로 이동합니다.'
+    submitted.value = true
     setTimeout(() => {
       if (created?.id) router.push(`/courses/${created.id}`)
       else router.push('/courses')

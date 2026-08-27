@@ -20,7 +20,7 @@ export const useWaitlistStore = defineStore('waitlist', () => {
   const items = ref([])
   const loading = ref(false)
   const error = ref(null)
-  // 이 서버에 취소표 대기 기능이 배포되어 있는지
+  // 구버전 서버와 함께 띄웠을 때 대기 기능 지원 여부
   const available = ref(true)
 
   const waitingCourseIds = computed(
@@ -35,8 +35,7 @@ export const useWaitlistStore = defineStore('waitlist', () => {
       const list = unwrap(await waitlistApi.mine())
       items.value = Array.isArray(list) ? list : []
     } catch (e) {
-      // 서버에 대기 기능이 아직 배포되지 않았으면 조용히 비워 둔다.
-      // 없는 기능 때문에 내 예매 화면에 오류 배너가 뜨면 안 된다.
+      // 구버전 서버에는 엔드포인트가 없을 수 있으므로 빈 상태로 호환한다.
       const st = e.response?.status
       if (st === 404 || st === 405 || st === 500) {
         available.value = false

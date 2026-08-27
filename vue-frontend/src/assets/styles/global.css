@@ -60,6 +60,11 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 input, select, textarea { font: inherit; color: inherit; }
 ul, ol { list-style: none; }
 
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(46, 107, 230, .32);
+  outline-offset: 2px;
+}
+
 ::selection { background: var(--red); color: #fff; }
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--bg-soft); }
@@ -68,7 +73,7 @@ ul, ol { list-style: none; }
 /* ---------- 레이아웃 ---------- */
 .wrap  { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 .narrow{ max-width: 760px;  margin: 0 auto; padding: 0 20px; }
-.page  { padding: 28px 0 80px; }
+.page  { padding-top: 28px; padding-bottom: 80px; }
 
 /* 페이지 제목 — 예매 사이트답게 크지 않고 단단하게 */
 .ptitle {
@@ -226,6 +231,7 @@ ul, ol { list-style: none; }
 }
 .blank h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
 .blank p { font-size: 13.5px; color: var(--t3); }
+.blank p, .alert { overflow-wrap: anywhere; }
 
 .load { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px 0; color: var(--t3); font-size: 13.5px; }
 .spin {
@@ -256,6 +262,7 @@ ul, ol { list-style: none; }
 
 @media (max-width: 760px) {
   .wrap, .narrow { padding: 0 14px; }
+  .page { padding-top: 22px; padding-bottom: 56px; }
   .ptitle { font-size: 19px; }
   .dl > div { grid-template-columns: 88px 1fr; }
 }

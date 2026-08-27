@@ -45,7 +45,7 @@ const oneLine = computed(() => {
 </script>
 
 <style scoped>
-.card { display: block; }
+.card { display: flex; flex-direction: column; height: 100%; }
 .thumb {
   position: relative;
   border-radius: var(--r);
@@ -68,20 +68,21 @@ const oneLine = computed(() => {
   font-weight: 700;
 }
 
-/* 매진이면 포스터를 덮어 바로 알아보게 한다 */
+/* 작품명은 가리지 않고 포스터 위쪽에서 상태만 선명하게 알린다. */
 .sold {
   position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(23,27,34,.62);
+  top: 9px; right: 9px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(201, 43, 62, .92);
   color: #fff;
-  font-size: 15px;
+  font-size: 11.5px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .04em;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
 }
 
-.info { padding: 11px 2px 0; }
+.info { display: flex; flex: 1; flex-direction: column; padding: 11px 2px 0; }
 .ttl {
   margin: 7px 0 3px;
   font-size: 15px;
@@ -102,7 +103,7 @@ const oneLine = computed(() => {
   text-overflow: ellipsis;
 }
 .foot {
-  margin-top: 9px;
+  margin-top: auto;
   padding-top: 9px;
   border-top: 1px solid var(--line);
   display: flex;

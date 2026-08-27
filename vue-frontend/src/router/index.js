@@ -34,14 +34,14 @@ const routes = [
     path: '/courses/:id(\\d+)/booking',
     name: 'Booking',
     component: () => import('@/views/BookingView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, viewerOnly: true }
   },
   {
     // UI-005 내 예매
     path: '/enrollments',
     name: 'Enrollment',
     component: () => import('@/views/EnrollmentView.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, viewerOnly: true }
   },
   {
     // UI-006 / UI-007 마이페이지
@@ -62,11 +62,14 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  if (to.meta.requiresAuth && !auth.isAuthenticated) return { name: 'Login' }
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    return { name: 'Login', query: { redirect: to.fullPath } }
+  }
   // 데모 모드에서는 로그인한 뒤에도 /login 에 들어갈 수 있어야 한다.
   // 계정을 바꿔 가며 관람객/기획사 화면을 둘 다 봐야 하기 때문.
   if (to.meta.guestOnly && auth.isAuthenticated && !DEMO) return { name: 'CourseList' }
   if (to.meta.plannerOnly && auth.user?.role !== 'INSTRUCTOR') return { name: 'CourseList' }
+  if (to.meta.viewerOnly && auth.user?.role === 'INSTRUCTOR') return { name: 'CourseList' }
 })
 
 export default router

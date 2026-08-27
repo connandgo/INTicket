@@ -8,27 +8,26 @@
         <span class="cnt">{{ store.items.length }}건</span>
       </h1>
 
-      <div v-if="store.loading" class="load"><span class="spin"></span>예매 내역을 불러오는 중입니다</div>
-
-      <div v-else-if="store.error" class="blank">
-        <h3>예매 내역을 불러오지 못했습니다</h3>
-        <p>{{ store.error }}</p>
-        <button class="btn btn-line btn-sm" style="margin-top:14px" @click="store.fetchMine()">다시 시도</button>
-      </div>
-
-      <div v-else-if="!store.items.length" class="blank">
-        <h3>예매한 공연이 없습니다</h3>
-        <p>공연을 둘러보고 마음에 드는 공연을 예매해 보세요.</p>
-        <router-link to="/courses" class="btn btn-red btn-sm" style="margin-top:14px">공연 보러 가기</router-link>
-      </div>
+      <div v-if="store.loading && !store.loaded" class="load"><span class="spin"></span>예매 내역을 불러오는 중입니다</div>
 
       <template v-else>
+        <p v-if="store.error" class="alert alert-err action-alert">
+          <span>{{ store.error }}</span>
+          <button class="btn btn-line btn-sm" @click="store.fetchMine()">다시 시도</button>
+        </p>
+
+        <div v-if="!store.items.length" class="blank compact">
+          <h3>예매한 공연이 없습니다</h3>
+          <p>공연을 둘러보고 마음에 드는 공연을 예매해 보세요.</p>
+          <router-link to="/courses" class="btn btn-red btn-sm blank-action">공연 보러 가기</router-link>
+        </div>
+
         <p v-if="hasPending" class="alert alert-info pend">
           결제 처리 중인 예매가 있습니다. 결제가 끝나면 예매 확정으로 바뀝니다.
           <button class="refresh" @click="store.fetchMine()">새로고침</button>
         </p>
 
-        <ul class="rows">
+        <ul v-if="store.items.length" class="rows">
           <li v-for="e in store.items" :key="e.id" class="row">
             <router-link :to="`/courses/${e.courseId}`" class="rposter">
               <PosterArt :id="e.courseId" :title="title(e)" :genre="genre(e)" />
@@ -73,16 +72,20 @@
 
         <p v-if="cancelErr" class="alert alert-err">{{ cancelErr }}</p>
 
-        <!-- 취소표 대기 (Sprint2) -->
-        <section v-if="wait.items.length" class="wsec">
+        <section v-if="wait.loading || wait.error || wait.items.length" class="wsec">
           <h2 class="stitle">취소표 대기</h2>
+          <div v-if="wait.loading && !wait.items.length" class="load inline-load"><span class="spin"></span>대기 내역을 불러오는 중입니다</div>
+          <p v-else-if="wait.error" class="alert alert-err action-alert">
+            <span>{{ wait.error }}</span>
+            <button class="btn btn-line btn-sm" @click="wait.fetchMine()">다시 시도</button>
+          </p>
           <p v-if="wait.hasWaiting" class="alert alert-info wnote">
             자리가 나면 대기 순서대로 <b>자동으로 예매·결제까지</b> 처리됩니다.
             이 화면을 열어두시면 {{ POLL_SEC }}초마다 확인합니다.
             <button class="refresh" @click="wait.fetchMine()">지금 확인</button>
           </p>
 
-          <ul class="wrows">
+          <ul v-if="wait.items.length" class="wrows">
             <li v-for="w in wait.items" :key="w.id" class="wrow">
               <span class="bdg" :class="WAIT_STYLE[w.status]">{{ WAIT_LABEL[w.status] }}</span>
               <router-link :to="`/courses/${w.courseId}`" class="wttl">{{ courseTitle(w.courseId) }}</router-link>
@@ -92,7 +95,7 @@
           </ul>
         </section>
 
-        <p class="foot-note small muted">
+        <p v-if="store.items.length || wait.items.length" class="foot-note small muted">
           취소하면 결제도 함께 취소되고 좌석이 다시 풀립니다. 실제 환불 트랜잭션은 발생하지 않는 모의 결제입니다.
         </p>
       </template>
@@ -137,9 +140,7 @@ async function doCancel(e) {
     if (err.response?.status === 403) {
       cancelErr.value = '본인의 예매만 취소할 수 있습니다.'
     } else if (isNotDeployed(err)) {
-      cancelErr.value =
-        '이 서버에는 아직 예매 취소 기능이 배포되지 않았습니다. ' +
-        '백엔드 컨테이너를 최신 소스로 다시 빌드해야 동작합니다.'
+      cancelErr.value = '예매 취소 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.'
     } else {
       cancelErr.value = err.response?.data?.message || '예매를 취소하지 못했습니다.'
     }
@@ -151,13 +152,12 @@ async function doCancel(e) {
 onBeforeUnmount(() => wait.stopPolling())
 
 onMounted(async () => {
-  await wait.fetchMine()
+  await Promise.all([wait.fetchMine(), store.fetchMine()])
   // 대기 목록에 공연명을 붙이려면 공연 목록이 필요하다.
-  if (wait.items.length && !courses.courses.length) courses.fetchCourses()
+  if (wait.items.length && !courses.courses.length) await courses.fetchCourses()
   // 서버가 매칭을 먼저 알려주지 않으므로 대기 중일 때만 주기적으로 다시 읽는다.
   wait.startPolling(() => store.fetchMine(), POLL_SEC * 1000)
 
-  await store.fetchMine()
   // 모의 결제가 곧바로 끝나므로 PENDING이 남아 있으면 잠깐 뒤 한 번 더 읽는다.
   if (store.items.some((e) => e.status === 'PENDING')) {
     setTimeout(() => store.fetchMine(), 1500)
@@ -171,7 +171,7 @@ function title(e) {
 function genre(e) {
   return genreLabel(e.course?.category)
 }
-// 회차·등급·매수는 백엔드가 아직 모르는 값이라 예매 시점에 브라우저에 붙여 둔 것을 읽는다.
+// 실서버 응답에 booking이 포함된다. 데모 데이터만 브라우저 저장값을 보조로 쓴다.
 function detail(e) {
   return e.booking || bookingApi.detailOf(e.id)
 }
@@ -186,6 +186,10 @@ function fmt(iso) {
 
 <style scoped>
 .pend { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.action-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.action-alert .btn { flex-shrink: 0; }
+.blank.compact { padding: 34px 20px; }
+.blank-action { margin-top: 14px; }
 .refresh { margin-left: auto; font-size: 12.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 .rows { border-top: 2px solid var(--navy); }
@@ -213,6 +217,7 @@ function fmt(iso) {
 .rprice { font-size: 14px; font-weight: 700; }
 
 .wsec { margin-top: 40px; }
+.inline-load { min-height: 96px; }
 .wnote { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .wnote b { font-weight: 700; }
 .wrows { border-top: 2px solid var(--navy); }
@@ -235,5 +240,8 @@ function fmt(iso) {
   .row { grid-template-columns: 56px 1fr; row-gap: 10px; }
   .rposter { width: 56px; }
   .rside { grid-column: 2; flex-direction: row; align-items: center; justify-content: flex-start; }
+  .confirm { flex-wrap: wrap; }
+  .action-alert, .wnote { align-items: flex-start; flex-direction: column; }
+  .action-alert .btn, .refresh { margin-left: 0; }
 }
 </style>

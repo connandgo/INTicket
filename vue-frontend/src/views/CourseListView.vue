@@ -8,6 +8,11 @@
         <span class="cnt">{{ list.length }}건</span>
       </h1>
 
+      <p v-if="store.isShowcase" class="preview-note">
+        <span class="bdg bdg-gray">둘러보기</span>
+        발표용 공연 목록입니다. 로그인하면 실시간 공연·잔여 좌석으로 전환됩니다.
+      </p>
+
       <!-- 장르 -->
       <div class="tabs">
         <button
@@ -43,12 +48,6 @@
 
       <div v-if="store.loading" class="load"><span class="spin"></span>공연을 불러오는 중입니다</div>
 
-      <div v-else-if="store.needsLogin" class="blank">
-        <h3>로그인하면 공연 목록을 볼 수 있습니다</h3>
-        <p>이 서버는 공연 조회에도 로그인을 요구합니다.</p>
-        <router-link to="/login" class="btn btn-red btn-sm" style="margin-top:14px">로그인</router-link>
-      </div>
-
       <div v-else-if="store.error" class="blank">
         <h3>공연 목록을 불러오지 못했습니다</h3>
         <p>{{ store.error }}</p>
@@ -71,7 +70,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import CourseCard from '@/components/CourseCard.vue'
 import { useCourseStore } from '@/store/course.js'
@@ -80,6 +80,7 @@ import { GENRE_TABS } from '@/domain/genre.js'
 
 const store = useCourseStore()
 const auth = useAuthStore()
+const route = useRoute()
 const sort = ref('pop')
 
 const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
@@ -89,18 +90,36 @@ const q = ref('')
 const list = computed(() => {
   const kw = q.value.trim().toLowerCase()
   let arr = [...store.visible]
-  // 공연명 부분 일치. 결과가 없으면 빈 목록을 그대로 보여 준다.
-  if (kw) arr = arr.filter((c) => (c.title || '').toLowerCase().includes(kw))
+  if (kw) {
+    arr = arr.filter((c) =>
+      [c.title, c.description].some((value) => (value || '').toLowerCase().includes(kw))
+    )
+  }
   if (sort.value === 'pop') return arr.sort((a, b) => (b.enrollmentCount || 0) - (a.enrollmentCount || 0))
   if (sort.value === 'low') return arr.sort((a, b) => Number(a.price) - Number(b.price))
-  return arr.sort((a, b) => Number(b.id) - Number(a.id))
+  return arr.sort((a, b) => {
+    const byDate = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    return byDate || Number(b.id) - Number(a.id)
+  })
 })
 
-onMounted(() => store.fetchCourses())
+function applyGenre(value) {
+  store.setGenre(GENRE_TABS.some((tab) => tab.code === value) ? value : 'ALL')
+}
+
+watch(() => route.query.genre, applyGenre)
+onMounted(() => {
+  applyGenre(route.query.genre)
+  store.fetchCourses()
+})
 </script>
 
 <style scoped>
 .search { position: relative; margin-bottom: 16px; max-width: 420px; }
+.preview-note {
+  display: flex; align-items: center; gap: 9px;
+  margin: -10px 0 20px; color: var(--t2); font-size: 12.5px;
+}
 .search .inp { padding-right: 34px; }
 .clear {
   position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -124,6 +143,7 @@ onMounted(() => store.fetchCourses())
 }
 
 @media (max-width: 760px) {
+  .preview-note { align-items: flex-start; line-height: 1.6; }
   .grid { grid-template-columns: repeat(2, 1fr); gap: 22px 12px; }
 }
 </style>

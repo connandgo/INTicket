@@ -19,7 +19,7 @@
         </template>
         <template v-else>
           <router-link to="/login" class="ul">로그인</router-link>
-          <router-link to="/login" class="ul">회원가입</router-link>
+          <router-link :to="{ name: 'Login', query: { mode: 'join' } }" class="ul">회원가입</router-link>
         </template>
       </div>
     </div>
@@ -27,7 +27,7 @@
     <!-- 메인 -->
     <div class="main">
       <div class="wrap main-in">
-        <router-link to="/" class="logo">
+        <router-link to="/" class="logo" aria-label="INTicket 홈">
           <span class="logo-mk">IN</span>
           <span class="logo-tx">티켓</span>
         </router-link>
@@ -138,6 +138,10 @@ function signOut() {
 .cta { margin-left: auto; }
 
 @media (max-width: 760px) {
+  .util-in { overflow-x: auto; justify-content: flex-start; scrollbar-width: none; }
+  .util-in::-webkit-scrollbar { display: none; }
+  .util-in > * { flex-shrink: 0; }
+  .demo { margin-right: 0; }
   .main-in { height: 52px; gap: 18px; }
   .nav { gap: 16px; }
   .nv { font-size: 14px; }

@@ -20,6 +20,11 @@
         <h2 class="stitle">등록한 공연</h2>
 
         <div v-if="course.loading" class="load"><span class="spin"></span>불러오는 중입니다</div>
+        <div v-else-if="course.error" class="blank compact">
+          <h3>등록한 공연을 불러오지 못했습니다</h3>
+          <p>{{ course.error }}</p>
+          <button class="btn btn-line btn-sm retry" @click="loadPlanner">다시 시도</button>
+        </div>
         <div v-else-if="!myCourses.length" class="blank">
           <h3>등록한 공연이 없습니다</h3>
           <p>첫 공연을 등록하면 바로 예매를 받을 수 있습니다.</p>
@@ -51,17 +56,25 @@
       <!-- 공연기획사: 회차별 판매 현황 -->
       <section v-if="isPlanner && myCourses.length" class="sec">
         <h2 class="stitle">판매 현황</h2>
-        <div v-for="c in myCourses" :key="'s' + c.id" class="salesblk">
-          <p class="sc-t">{{ c.title }}</p>
-          <ul class="sc-rows">
-            <li v-for="r in salesOf(c.id)" :key="r.id" class="sc-row">
-              <span class="sc-when num">{{ r.date.replaceAll('-', '.') }} ({{ r.weekday }}) {{ r.time }}</span>
-              <span class="sc-bar"><i :style="{ width: r.rate + '%' }"></i></span>
-              <span class="sc-n num">{{ r.sold }} / {{ r.capacity }}</span>
-              <span class="sc-p num" :class="{ hot: r.rate >= 80 }">{{ r.rate }}%</span>
-            </li>
-          </ul>
-        </div>
+        <div v-if="salesLoading" class="load inline-load"><span class="spin"></span>판매 현황을 불러오는 중입니다</div>
+        <p v-else-if="salesError" class="alert alert-err action-alert">
+          <span>{{ salesError }}</span>
+          <button class="btn btn-line btn-sm" @click="loadSales(myCourses)">다시 시도</button>
+        </p>
+        <template v-else>
+          <div v-for="c in myCourses" :key="'s' + c.id" class="salesblk">
+            <p class="sc-t">{{ c.title }}</p>
+            <p v-if="!salesOf(c.id).length" class="small muted no-round">등록된 회차가 없습니다.</p>
+            <ul v-else class="sc-rows">
+              <li v-for="r in salesOf(c.id)" :key="r.id" class="sc-row">
+                <span class="sc-when num">{{ r.date.replaceAll('-', '.') }} ({{ r.weekday }}) {{ shortTime(r.time) }}</span>
+                <span class="sc-bar"><i :style="{ width: r.rate + '%' }"></i></span>
+                <span class="sc-n num">{{ r.sold }} / {{ r.capacity }}</span>
+                <span class="sc-p num" :class="{ hot: r.rate >= 80 }">{{ r.rate }}%</span>
+              </li>
+            </ul>
+          </div>
+        </template>
       </section>
 
       <!-- 관람객: 내 예매 -->
@@ -76,6 +89,7 @@
         <div v-else-if="enroll.error" class="blank">
           <h3>예매 내역을 불러오지 못했습니다</h3>
           <p>{{ enroll.error }}</p>
+          <button class="btn btn-line btn-sm retry" @click="enroll.fetchMine()">다시 시도</button>
         </div>
 
         <div v-else-if="!enroll.items.length" class="blank">
@@ -137,23 +151,38 @@ const myCourses = computed(() =>
   course.courses.filter((c) => String(c.instructorId) === String(auth.user?.id))
 )
 
-// 회차별 판매율. performance-service가 생기면 api/performance.js 안만 바뀐다.
+// 회차별 판매율은 course-service의 판매 현황 API에서 읽는다.
 const sales = ref({})
+const salesLoading = ref(false)
+const salesError = ref('')
 function salesOf(courseId) {
   return sales.value[courseId] || []
 }
+function shortTime(value) {
+  return String(value || '').slice(0, 5)
+}
 async function loadSales(list) {
-  const out = {}
-  for (const c of list) {
-    try { out[c.id] = await performanceApi.sales(c) } catch { out[c.id] = [] }
+  salesLoading.value = true
+  salesError.value = ''
+  try {
+    const rows = await Promise.all(list.map(async (c) => [c.id, await performanceApi.sales(c)]))
+    sales.value = Object.fromEntries(rows)
+  } catch (e) {
+    console.error('[mypage] 판매 현황 조회 실패:', e)
+    salesError.value = e.response?.data?.message || '판매 현황을 불러오지 못했습니다.'
+  } finally {
+    salesLoading.value = false
   }
-  sales.value = out
+}
+
+async function loadPlanner() {
+  await course.fetchCourses({ force: true })
+  if (!course.error) await loadSales(myCourses.value)
 }
 
 onMounted(async () => {
   if (isPlanner.value) {
-    await course.fetchCourses()
-    await loadSales(myCourses.value)
+    await loadPlanner()
   } else {
     enroll.fetchMine()
   }
@@ -183,6 +212,10 @@ onMounted(async () => {
 .nm { font-size: 16px; font-weight: 700; letter-spacing: -0.04em; }
 
 .sec { margin-bottom: 44px; }
+.compact { padding: 34px 20px; }
+.retry { margin-top: 14px; }
+.inline-load { min-height: 96px; padding: 28px 0; }
+.action-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .stitle { display: flex; align-items: baseline; justify-content: space-between; }
 .more { font-size: 12.5px; font-weight: 500; color: var(--t3); }
 .more:hover { color: var(--red); }
@@ -205,6 +238,7 @@ onMounted(async () => {
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 28px 20px; }
 
 .salesblk { margin-bottom: 24px; }
+.no-round { padding: 12px 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .sc-t { font-size: 14px; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 8px; }
 .sc-rows { border-top: 1px solid var(--line); }
 .sc-row {
@@ -234,5 +268,6 @@ onMounted(async () => {
   .tbl { display: block; overflow-x: auto; white-space: nowrap; }
   .sc-row { grid-template-columns: 1fr 60px 44px; row-gap: 4px; }
   .sc-when { grid-column: 1 / -1; }
+  .action-alert { align-items: flex-start; flex-direction: column; }
 }
 </style>
