@@ -1,8 +1,12 @@
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config.settings import settings
+
+# JWT payload에서 사용자 ID가 담길 수 있는 claim 이름 후보.
+# auth-server가 이미지로만 제공돼 실제 claim 이름을 확정할 수 없어 순서대로 시도한다.
+USER_ID_CLAIMS = ("userId", "user_id", "sub", "uid")
 
 security = HTTPBearer()
 
@@ -71,6 +75,43 @@ async def verify_token(
             detail=f"유효하지 않은 토큰입니다: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def extract_user_id(payload: dict, request: Request = None) -> int:
+    """토큰 payload에서 사용자 ID를 꺼낸다. 없으면 X-User-Id 헤더를 폴백으로 쓴다.
+
+    다른 Java 서비스들은 전부 Gateway가 넣어주는 X-User-Id 헤더만 읽으므로,
+    payload에 ID claim이 없는 배포에서도 이 폴백으로 동작한다.
+    """
+    for claim in USER_ID_CLAIMS:
+        value = (payload or {}).get(claim)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue  # sub가 이메일 같은 비숫자면 다음 후보로 넘어간다
+
+    if request is not None:
+        header_value = request.headers.get("X-User-Id")
+        if header_value:
+            try:
+                return int(header_value)
+            except ValueError:
+                pass
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="토큰과 헤더 어디에서도 사용자 ID를 찾을 수 없습니다",
+    )
+
+
+async def current_user_id(
+    request: Request,
+    payload: dict = Depends(verify_token),
+) -> int:
+    """라우터에서 바로 쓰는 사용자 ID 의존성."""
+    return extract_user_id(payload, request)
 
 
 async def verify_service_token(
