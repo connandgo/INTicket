@@ -22,17 +22,25 @@
 
 ## 실행
 
-Gateway와 Auth Server는 원본 프로젝트의 사전 빌드 이미지인 `msa-lecture/api-gateway:1.0`, `msa-lecture/auth-server:1.0`을 그대로 사용합니다. 해당 이미지가 로컬에 준비된 환경에서 다음 명령으로 전체 애플리케이션을 빌드·실행합니다.
+Gateway와 Auth Server는 원본 프로젝트의 사전 빌드 이미지인 `msa-lecture/api-gateway:1.0`, `msa-lecture/auth-server:1.0`을 그대로 사용합니다. GitHub의 단일 파일 100MB 제한을 지키기 위해 루트의 이미지 파일을 `infra-images.tar.part.aa`~`ad`로 분할해 두었습니다. 최초 실행 전에 한 번만 결합하고 Docker에 불러옵니다.
 
 ```bash
-docker compose -f docker-compose.build.yml up --build -d
+cat infra-images.tar.part.* > infra-images.tar
+shasum -a 256 infra-images.tar
+docker load -i infra-images.tar
+```
+
+정상 체크섬은 `edb44b60e1069ac1a3557a75b188ec3ae76d410aa916bfcd0c400258dcc26568`입니다. 이후 루트의 단일 `docker-compose.yml`로 프론트엔드를 포함한 전체 애플리케이션을 빌드·실행합니다.
+
+```bash
+docker compose build --no-cache && docker compose up -d
 ```
 
 브라우저에서 `http://localhost:3000`에 접속합니다. MariaDB 초기화 SQL은 새 볼륨을 처음 만들 때 자동 실행됩니다. 기존의 단일 `lecture_db` 볼륨을 새 스키마로 전환할 때만, 필요한 데이터를 백업한 뒤 기존 볼륨을 명시적으로 제거하고 다시 실행해야 합니다.
 
 ```bash
-docker compose -f docker-compose.build.yml down -v
-docker compose -f docker-compose.build.yml up --build -d
+docker compose down -v
+docker compose build --no-cache && docker compose up -d
 ```
 
 `down -v`는 DB 데이터를 삭제하므로 초기화가 필요한 경우에만 사용합니다.

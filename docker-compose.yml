@@ -1,13 +1,3 @@
-# The following practice code is intended for educational purposes only.
-# For contact: audit@korea.ac.kr, Sungryel Lim Ph.D
-#
-# Student runtime version (ARM64)
-# - Uses prebuilt Docker images only
-# - Does not execute Dockerfile/Gradle builds
-# - Build secondary images first with:
-#     docker compose -f docker-compose.build.yml build
-# - Start with:
-#     docker compose -f docker-compose.student-arm64.yml up -d --pull never
 
 services:
 
@@ -15,7 +5,6 @@ services:
 
   mariadb:
     image: mariadb:11.2
-    platform: linux/arm64/v8
     container_name: lecturedb
     environment:
       MYSQL_ROOT_PASSWORD: SqlDba-1
@@ -38,7 +27,6 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.7.0
-    platform: linux/arm64
     container_name: lecture-kafka
     environment:
       KAFKA_NODE_ID: 1
@@ -66,11 +54,14 @@ services:
     networks:
       - lecture-net
 
+
   # Service Discovery
 
   eureka-server:
     image: inticket/eureka-server:secondary
-    platform: linux/arm64
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
     container_name: lecture-eureka
     ports:
       - "8761:8761"
@@ -85,11 +76,11 @@ services:
     networks:
       - lecture-net
 
+
   # Auth Server
 
   auth-server:
     image: msa-lecture/auth-server:1.0
-    platform: linux/arm64
     container_name: lecture-auth
     ports:
       - "9000:9000"
@@ -113,11 +104,11 @@ services:
     networks:
       - lecture-net
 
+
   # API Gateway
 
   api-gateway:
     image: msa-lecture/api-gateway:1.0
-    platform: linux/arm64
     container_name: lecture-gateway
     ports:
       - "8080:8080"
@@ -134,11 +125,14 @@ services:
     networks:
       - lecture-net
 
+
   # Microservices
 
   user-service:
     image: inticket/user-service:secondary
-    platform: linux/arm64
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
     container_name: lecture-user
     ports:
       - "8081:8081"
@@ -162,7 +156,9 @@ services:
 
   course-service:
     image: inticket/course-service:secondary
-    platform: linux/arm64
+    build:
+      context: ./course-service
+      dockerfile: Dockerfile
     container_name: lecture-course
     ports:
       - "8082:8082"
@@ -186,7 +182,9 @@ services:
 
   enrollment-service:
     image: inticket/enrollment-service:secondary
-    platform: linux/arm64
+    build:
+      context: ./enrollment-service
+      dockerfile: Dockerfile
     container_name: lecture-enrollment
     ports:
       - "8083:8083"
@@ -215,7 +213,9 @@ services:
 
   payment-service:
     image: inticket/payment-service:secondary
-    platform: linux/arm64
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
     container_name: lecture-payment
     ports:
       - "8084:8084"
@@ -242,7 +242,9 @@ services:
 
   recommend-service:
     image: inticket/recommend-service:secondary
-    platform: linux/arm64
+    build:
+      context: ./recommend-service
+      dockerfile: Dockerfile
     container_name: lecture-recommend
     ports:
       - "8085:8085"
@@ -270,7 +272,9 @@ services:
 
   frontend:
     image: inticket/frontend:secondary
-    platform: linux/arm64
+    build:
+      context: ./vue-frontend
+      dockerfile: Dockerfile
     container_name: lecture-frontend
     ports:
       - "3000:80"
@@ -279,6 +283,9 @@ services:
         condition: service_started
     networks:
       - lecture-net
+
+
+# Volumes & Networks
 
 volumes:
   mariadb_data:
