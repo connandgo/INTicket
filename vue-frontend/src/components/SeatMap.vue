@@ -23,8 +23,8 @@
               :class="{ taken: s.taken, on: isPicked(z.grade, s) }"
               :style="!s.taken ? { '--c': z.color } : null"
               :disabled="s.taken"
-              :aria-label="`${z.grade}석 ${row.label}열 ${s.n}번${s.taken ? ' 판매완료' : ''}`"
-              :title="`${z.grade}석 ${row.label}${s.n}`"
+              :aria-label="`${z.grade}등급 ${row.label}열 ${s.n}번${s.taken ? ' 판매완료' : ''}`"
+              :title="s.id || `${z.grade}석 ${row.label}${s.n}`"
               @click="toggle(z, s)"
             ></button>
           </div>
@@ -49,6 +49,7 @@
 <script setup>
 import { computed } from 'vue'
 import { remaining } from '@/api/performance.js'
+import { SEAT_GRADES } from '@/data/seatLayout.js'
 
 const props = defineProps({
   round: { type: Object, required: true },
@@ -66,25 +67,23 @@ const COLOR = {
 }
 
 // 한 줄에 몇 자리씩 놓을지. 등급마다 정원이 달라 줄 수가 달라진다.
-const PER_ROW = 20
-const ROW_LABELS = 'ABCDEFGHJKLMNPQRSTUV'.split('')
-
+// 열 이름과 열당 좌석 수는 서버 좌석 배치도를 따른다.
+// 화면이 임의로 열을 붙이면 AI 가 배정한 'S-Q-5' 가 배치도에 없는 자리가 된다.
 const zones = computed(() =>
-  props.round.grades.map((g, gi) => {
+  props.round.grades.map((g) => {
     const left = remaining(g)
+    const layout = g.rows || SEAT_GRADES[g.grade]?.rows || {}
     const rows = []
-    // 팔린 자리를 뒤에서부터 채운다 — 앞자리가 먼저 나가는 것처럼 보이게
+    // 팔린 자리는 앞열부터 채운다 — 앞자리가 먼저 나가는 실제 흐름에 맞춘다
     let seatIndex = 0
-    const rowCount = Math.ceil(g.capacity / PER_ROW)
 
-    for (let r = 0; r < rowCount; r++) {
+    for (const [label, count] of Object.entries(layout)) {
       const seats = []
-      const n = Math.min(PER_ROW, g.capacity - r * PER_ROW)
-      for (let i = 1; i <= n; i++) {
-        seats.push({ n: i, idx: seatIndex, taken: seatIndex < g.sold })
+      for (let i = 1; i <= count; i++) {
+        seats.push({ n: i, idx: seatIndex, taken: seatIndex < g.sold, id: `${g.grade}-${label}-${i}` })
         seatIndex++
       }
-      rows.push({ label: ROW_LABELS[(gi * 3 + r) % ROW_LABELS.length], seats })
+      rows.push({ label, seats })
     }
 
     return { grade: g.grade, price: g.price, capacity: g.capacity, left, rows, color: COLOR[g.grade] || '#4B5563' }

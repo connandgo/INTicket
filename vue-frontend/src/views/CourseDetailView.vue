@@ -81,7 +81,7 @@
                 <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
                 <router-link v-if="firstRoundId" :to="`/courses/${c.id}/seat-wish?round=${firstRoundId}`"
                              class="btn btn-ai btn-wide">
-                  AI에게 원하는 자리 말하기
+                  취소표 매칭 신청하기
                 </router-link>
                 <button class="btn btn-line btn-wide" :disabled="waiting" @click="joinWaitlist">
                   <span v-if="waiting" class="spin spin-w"></span>
@@ -146,7 +146,7 @@
               >로그인 후 예매</router-link>
               <span v-else-if="isViewer && totalLeft(r) > 0 && c.status === 'ACTIVE'" class="rd-go rd-two">
                 <router-link :to="`/courses/${c.id}/seat-wish?round=${r.id}`"
-                             class="btn btn-line btn-sm ai-b" title="AI 좌석 매칭">AI 매칭</router-link>
+                             class="btn btn-line btn-sm ai-b" title="취소표 매칭">취소표 매칭</router-link>
                 <router-link :to="`/courses/${c.id}/booking?round=${r.id}`"
                              class="btn btn-red btn-sm">예매하기</router-link>
               </span>

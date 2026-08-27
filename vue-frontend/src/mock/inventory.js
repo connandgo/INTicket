@@ -7,15 +7,18 @@
 // 발표 시연과 화면 검증까지가 이 파일의 역할이다.
 
 import { HOLD_MINUTES } from '@/config/features.js'
+import { SEAT_GRADES, GRADE_ORDER, capacityOf } from '@/data/seatLayout.js'
 
 const KEY = 'inticket.inventory.v1'
 
-export const GRADE_PRESET = [
-  { grade: 'VIP', rate: 1.6 },
-  { grade: 'R', rate: 1.0 },
-  { grade: 'S', rate: 0.68 },
-  { grade: 'A', rate: 0.45 }
-]
+// 등급·가격·정원은 서버 좌석 배치도(seats.py)를 그대로 따른다.
+// 공연 가격에서 배수로 계산하면 AI 가 배정하는 좌석의 등급·가격과 어긋난다.
+export const GRADE_PRESET = GRADE_ORDER.map((grade) => ({
+  grade,
+  price: SEAT_GRADES[grade].price,
+  capacity: capacityOf(grade),
+  rows: SEAT_GRADES[grade].rows
+}))
 
 function load() {
   try {
@@ -49,7 +52,7 @@ function seedFor(course) {
       weekday: WD[dt.getDay()],
       time,
       grades: GRADE_PRESET.map((g, gi) => {
-        const capacity = [40, 120, 200, 160][gi]
+        const capacity = g.capacity
         // 회차마다, 등급마다 팔린 정도가 달라야 판매 현황이 의미 있게 보인다.
         // 앞등급일수록 그리고 주말 회차일수록 더 팔린 것으로 잡았다.
         const seed = (Number(course.id) * 31 + i * 17 + gi * 7) % 60
@@ -57,8 +60,9 @@ function seedFor(course) {
         const sold = Math.min(capacity, Math.round(capacity * ratio))
         return {
           grade: g.grade,
-          price: Math.round((Number(course.price) * g.rate) / 1000) * 1000,
+          price: g.price,
           capacity,
+          rows: g.rows,
           sold
         }
       })
