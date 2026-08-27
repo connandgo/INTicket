@@ -72,7 +72,7 @@ const isPlanner = computed(() => auth.user?.role === 'INSTRUCTOR')
 const roleLabel = computed(() => (isPlanner.value ? '공연기획사' : '관람객'))
 const isCourses = computed(() => route.path === '/courses' || route.path.startsWith('/courses/') && route.path !== '/courses/new')
 
-function signOut() {
+async function signOut() {
   // 데모는 인증 서버를 안 쓰므로 앱 세션만 지우면 된다.
   if (DEMO) {
     auth.logout(false)
@@ -80,7 +80,8 @@ function signOut() {
     return
   }
   // 실서버에서는 인증 서버 세션까지 끊어야 다음 로그인에서 아이디·비번을 다시 묻는다.
-  auth.fullLogout()
+  await auth.fullLogout()
+  router.push('/')
 }
 </script>
 
