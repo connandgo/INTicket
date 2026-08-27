@@ -160,6 +160,24 @@ export default async function mockAdapter(config) {
     return ok(config, list)
   }
 
+  m = url.match(/^\/api\/enrollments\/(\d+)$/)
+  if (m && method === 'delete') {
+    if (!me) return fail(config, '인증이 필요합니다', 401)
+    const e = db.enrollments.find((x) => x.id === Number(m[1]))
+    if (!e) return fail(config, `예매 정보를 찾을 수 없습니다: ${m[1]}`)
+    if (e.userId !== me.id) return fail(config, '본인의 예매만 취소할 수 있습니다', 403)
+    if (e.status === 'CANCELLED') return fail(config, '이미 취소된 예매입니다')
+
+    // ACTIVE였을 때만 예매 수를 되돌린다(PENDING은 애초에 올라간 적이 없다)
+    if (e.status === 'ACTIVE') {
+      const c = db.courses.find((x) => x.id === e.courseId)
+      if (c) c.enrollmentCount = Math.max(0, c.enrollmentCount - 1)
+    }
+    e.status = 'CANCELLED'
+    write(db)
+    return ok(config, null)
+  }
+
   /* ---------- 추천 (FastAPI, 래퍼 없음) ---------- */
   m = url.match(/^\/api\/recommend\/(\d+)$/)
   if (m && method === 'get') {

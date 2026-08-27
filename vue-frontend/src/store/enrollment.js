@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { enrollmentApi } from '@/api/enrollment.js'
+import { bookingApi } from '@/api/booking.js'
 
 function unwrap(res) {
   const d = res?.data
@@ -54,9 +55,27 @@ export const useEnrollmentStore = defineStore('enrollment', () => {
     return created
   }
 
+  // 예매 취소. 서버에서 지우고, 회차·등급 재고(아직 프론트에 있음)도 되돌린다.
+  async function cancel(enrollment) {
+    await enrollmentApi.cancel(enrollment.id)
+
+    // 예매할 때 브라우저에 붙여 둔 회차·등급·매수로 잔여 수량을 복구한다.
+    // booking-service가 생기면 서버가 알아서 하므로 이 블록은 사라진다.
+    const d = bookingApi.detailOf(enrollment.id)
+    if (d) {
+      try {
+        await bookingApi.release(d.courseId, d.roundId, d.grade, d.quantity)
+      } catch (e) {
+        console.warn('[enrollment] 재고 복구 실패:', e)
+      }
+    }
+
+    await fetchMine()
+  }
+
   function findByCourse(courseId) {
     return items.value.find((e) => e.courseId === Number(courseId) && e.status !== 'CANCELLED') || null
   }
 
-  return { items, loading, error, loaded, bookedCourseIds, fetchMine, book, findByCourse }
+  return { items, loading, error, loaded, bookedCourseIds, fetchMine, book, cancel, findByCourse }
 })

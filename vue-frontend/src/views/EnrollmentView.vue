@@ -50,12 +50,31 @@
               <span class="bdg" :class="STATUS_STYLE[e.status]">{{ STATUS_LABEL[e.status] }}</span>
               <span v-if="detail(e)" class="rprice num">{{ detail(e).amount.toLocaleString() }}원</span>
               <span v-else-if="e.course?.price" class="rprice num">{{ Number(e.course.price).toLocaleString() }}원</span>
+
+              <!-- 취소는 되돌릴 수 없어서 한 번 더 확인받는다 -->
+              <template v-if="e.status !== 'CANCELLED'">
+                <button
+                  v-if="confirming !== e.id"
+                  class="btn btn-line btn-sm"
+                  :disabled="busy === e.id"
+                  @click="confirming = e.id"
+                >예매 취소</button>
+                <span v-else class="confirm">
+                  <span class="c-q">취소할까요?</span>
+                  <button class="btn btn-red btn-sm" :disabled="busy === e.id" @click="doCancel(e)">
+                    {{ busy === e.id ? '취소 중' : '네, 취소' }}
+                  </button>
+                  <button class="btn btn-ghost btn-sm" :disabled="busy === e.id" @click="confirming = null">아니요</button>
+                </span>
+              </template>
             </div>
           </li>
         </ul>
 
+        <p v-if="cancelErr" class="alert alert-err">{{ cancelErr }}</p>
+
         <p class="foot-note small muted">
-          이번 버전에서는 예매 취소와 환불을 지원하지 않습니다.
+          취소하면 결제도 함께 취소되고 좌석이 다시 풀립니다. 실제 환불 트랜잭션은 발생하지 않는 모의 결제입니다.
         </p>
       </template>
     </main>
@@ -63,7 +82,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import PosterArt from '@/components/PosterArt.vue'
 import { useEnrollmentStore, STATUS_LABEL, STATUS_STYLE } from '@/store/enrollment.js'
@@ -72,6 +91,27 @@ import { genreLabel } from '@/domain/genre.js'
 
 const store = useEnrollmentStore()
 const hasPending = computed(() => store.items.some((e) => e.status === 'PENDING'))
+
+const confirming = ref(null)   // 취소 확인을 기다리는 예매 id
+const busy = ref(null)
+const cancelErr = ref('')
+
+async function doCancel(e) {
+  busy.value = e.id
+  cancelErr.value = ''
+  try {
+    await store.cancel(e)
+    confirming.value = null
+  } catch (err) {
+    console.error('[enrollment] 취소 실패:', err)
+    cancelErr.value =
+      err.response?.status === 403
+        ? '본인의 예매만 취소할 수 있습니다.'
+        : err.response?.data?.message || '예매를 취소하지 못했습니다.'
+  } finally {
+    busy.value = null
+  }
+}
 
 onMounted(async () => {
   await store.fetchMine()
@@ -125,6 +165,8 @@ function fmt(iso) {
 .meta dd { color: var(--t2); }
 
 .rside { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.confirm { display: inline-flex; align-items: center; gap: 6px; }
+.c-q { font-size: 12px; color: var(--t2); }
 .rprice { font-size: 14px; font-weight: 700; }
 
 .foot-note { margin-top: 16px; }

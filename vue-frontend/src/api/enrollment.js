@@ -9,9 +9,13 @@ export const enrollmentApi = {
   // 내 예매 내역
   getMine() {
     return api.get('/api/enrollments/my')
-  }
+  },
 
-  // DELETE /api/enrollments/{id} 는 백엔드에 없다(명세서 R5). 취소 버튼을 두지 않는다.
+  // 예매 취소. 본인 예매만 가능하고 결제도 함께 취소된다.
+  // 남의 예매면 403, 이미 취소됐거나 없는 예매면 400.
+  cancel(enrollmentId) {
+    return api.delete(`/api/enrollments/${enrollmentId}`)
+  }
 }
 
 export const recommendApi = {
