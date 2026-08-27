@@ -66,16 +66,32 @@
               <button v-for="e in EXAMPLES" :key="e" class="ex-b" @click="text = e">{{ e.slice(0, 18) }}…</button>
             </div>
 
-            <button class="btn btn-ai btn-wide" :disabled="parsing || !text.trim()" @click="run">
-              <span v-if="parsing" class="spin spin-w"></span>{{ parsing ? '분석 중' : 'AI로 조건 분석하기' }}
+            <button v-if="!registered" class="btn btn-ai btn-wide"
+                    :disabled="waiting || !text.trim()" @click="joinWaitlist">
+              <span v-if="waiting" class="spin spin-w"></span>{{ waiting ? '신청 중' : '신청하기' }}
             </button>
+            <p v-if="!registered" class="fhint">
+              지금 표가 없어도 괜찮습니다. 신청해두시면 취소표가 나왔을 때 조건에 맞는 분부터 알려드립니다.
+            </p>
+            <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
+
+            <!-- 신청 후: 취소표 발생 시뮬레이션 (시연용) -->
+            <template v-if="registered">
+              <p class="alert alert-ok">
+                <b>대기 {{ registered.seq }}번</b>으로 신청됐습니다.
+                취소표가 나오면 조건에 맞는 순서로 좌석을 배정받습니다.
+              </p>
+              <button class="btn btn-red btn-wide" :disabled="releasing" @click="triggerRelease">
+                {{ releasing ? '확인 중' : '취소표 발생' }}
+              </button>
+            </template>
           </article>
 
           <!-- 파싱 결과: 필수 / 선호 / 양보가능 -->
           <article v-if="wish" class="card card-pad up">
             <h2 class="s-t">
               AI가 이해한 조건
-              <span class="s-sub">{{ wish.source === 'AI_SERVICE' ? 'LLM 분석' : '규칙 기반 분석' }}</span>
+              <span class="s-sub">{{ wish.source === 'AI_SERVICE' ? 'AI 분석 결과' : '등록 전 미리보기' }}</span>
             </h2>
             <p class="b-d">틀린 게 있으면 아래에서 직접 빼고 다시 찾아볼 수 있습니다.</p>
 
@@ -132,24 +148,28 @@
                 class="btn btn-red btn-wide"
               >{{ picked.grade }}석으로 예매하러 가기</router-link>
 
-              <template v-if="soldOut || !picked?.available">
-                <p v-if="waitErr" class="alert alert-err">{{ waitErr }}</p>
-                <p v-if="myWait" class="alert alert-ok">
-                  이 조건으로 <b>대기 중</b>입니다. 자리가 나면 자동으로 예매됩니다.
-                </p>
-                <button v-else class="btn btn-ai btn-wide" :disabled="waiting" @click="joinWaitlist">
-                  <span v-if="waiting" class="spin spin-w"></span>
-                  {{ waiting ? '등록 중' : '이 조건으로 취소표 대기 걸기' }}
-                </button>
-                <p class="fhint">
-                  대기는 공연 단위로 등록되고, 위 조건은 매칭 우선순위를 정하는 데 쓰입니다.
-                </p>
-              </template>
+
             </div>
           </article>
         </section>
       </div>
     </main>
+
+    <!-- 취소표 매칭 결과 -->
+    <div v-if="modal" class="ov" @click.self="modal = null">
+      <div class="pop" role="dialog" aria-modal="true">
+        <template v-if="modal.offer">
+          <p class="pop-h">취소표가 매칭되었습니다!</p>
+          <p class="pop-seat">좌석: <b>{{ seatsLabel(modal.offer.seats) }}</b></p>
+          <p class="pop-sub">10분 내 결제 시 예매가 확정됩니다.</p>
+          <button class="btn btn-red btn-wide" @click="goPay">결제하러가기</button>
+        </template>
+        <template v-else>
+          <p class="pop-h none">매칭된 취소표가 없습니다.</p>
+          <button class="btn btn-line btn-wide" @click="modal = null">닫기</button>
+        </template>
+      </div>
+    </div>
 
     <main class="wrap page" v-else-if="loading">
       <div class="load"><span class="spin"></span>불러오는 중입니다</div>
@@ -166,19 +186,17 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import SeatMap from '@/components/SeatMap.vue'
 import { useCourseStore } from '@/store/course.js'
-import { useWaitlistStore } from '@/store/waitlist.js'
 import { performanceApi, remaining } from '@/api/performance.js'
-import { seatWishApi } from '@/api/seatWish.js'
+import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
-import { isNotSoldOutError } from '@/domain/soldout.js'
 
 const route = useRoute()
+const router = useRouter()
 const store = useCourseStore()
-const waitlist = useWaitlistStore()
 
 const course = computed(() => store.current)
 const round = ref(null)
@@ -192,7 +210,46 @@ const parsing = ref(false)
 
 const waiting = ref(false)
 const waitErr = ref('')
-const myWait = computed(() => waitlist.findByCourse(route.params.id))
+const registered = ref(null)   // 등록 결과 { waitlistId, seq, parsed, buckets }
+const releasing = ref(false)
+const modal = ref(null)        // { offer } | { offer: null }
+
+// 취소표를 발생시키고 내게 매칭된 좌석이 있는지 확인한다(시연용).
+// 실제 서비스에서는 취소가 일어날 때 서버가 알아서 돌린다.
+async function triggerRelease() {
+  releasing.value = true
+  modal.value = null
+  try {
+    await matchingDemoApi.release(route.params.id, pickSeats())
+    // 매칭이 끝날 시간을 준다
+    await new Promise((r) => setTimeout(r, 3000))
+    const offers = await seatWishApi.myOffers()
+    const mine = offers.find(
+      (o) => String(o.courseId) === String(route.params.id) && (!o.status || o.status === 'PENDING')
+    )
+    modal.value = { offer: mine || null }
+  } catch (e) {
+    console.error('[seat-wish] 취소표 매칭 실패:', e)
+    modal.value = { offer: null }
+  } finally {
+    releasing.value = false
+  }
+}
+
+// 풀린 좌석을 고른다. 신청 조건의 등급을 우선 쓰고, 없으면 S등급으로 둔다.
+function pickSeats() {
+  const g = wish.value?.grades?.[0] || 'S'
+  const rows = { VIP: 'A', R: 'F', S: 'Q', A: 'T' }
+  const row = rows[g] || 'Q'
+  const n = wish.value?.quantity || 1
+  return Array.from({ length: n }, (_, i) => `${g}-${row}-${i + 5}`)
+}
+
+function goPay() {
+  modal.value = null
+  router.push(`/courses/${route.params.id}/booking?round=${round.value.id}`)
+}
+const myWait = computed(() => registered.value)
 
 const BUCKETS = [
   { key: 'must', label: '양보할 수 없는 조건' },
@@ -231,20 +288,30 @@ onMounted(async () => {
   await store.fetchCourse(route.params.id)
   if (course.value) {
     round.value = await performanceApi.round(course.value, route.query.round)
-    waitlist.fetchMine()
+    // 이미 이 공연에 대기를 걸어 뒀는지 확인한다
+    try {
+      const mine = await seatWishApi.myWaitlists()
+      const found = mine.find((w) => String(w.courseId) === String(route.params.id))
+      if (found) {
+        registered.value = found
+        wish.value = { ...found.wish, buckets: found.buckets, source: 'AI_SERVICE', unparsed: [] }
+        text.value = found.rawText || ''
+        recompute()
+      }
+    } catch { /* 비로그인 등 — 조용히 넘어간다 */ }
   }
   loading.value = false
 })
 
+// 1단계: 문장을 해석해 보여준다(등록 전 확인용).
+// 서버에 미리보기 API 가 없어 로컬 파서를 쓴다. 실제 등록 시에는
+// 서버의 LLM 파싱 결과로 교체된다.
 async function run() {
   parsing.value = true
   picked.value = null
+  registered.value = null
   try {
-    wish.value = await seatWishApi.parse({
-      courseId: course.value.id,
-      scheduleId: round.value.id,
-      text: text.value
-    })
+    wish.value = await seatWishApi.preview(text.value)
     recompute()
   } finally {
     parsing.value = false
@@ -277,16 +344,29 @@ async function joinWaitlist() {
   waiting.value = true
   waitErr.value = ''
   try {
-    await waitlist.register(route.params.id)
+    // 조건 문장을 그대로 서버에 넘긴다. 서버의 LLM 이 파싱하고
+    // 취소가 발생하면 그 조건으로 대기자를 고른다.
+    const res = await seatWishApi.register({
+      courseId: route.params.id,
+      text: text.value
+    })
+    registered.value = res
+    // 서버가 이해한 조건으로 화면을 갱신한다. 로컬 파서 결과보다 이쪽이 정본이다.
+    // res.wish 에 매칭용 값(quantity·grades·maxPrice)이 들어 있다. 이걸 펼치지 않으면
+    // 추천 좌석이 조건을 못 읽고 엉뚱한 등급을 1순위로 올린다.
+    wish.value = { ...res.wish, buckets: res.buckets, source: res.source, unparsed: [] }
+    recompute()
   } catch (e) {
     console.error('[seat-wish] 대기 등록 실패:', e)
-    waitErr.value = isNotSoldOutError(e)
-      ? '아직 매진이 아니어서 대기 등록은 할 수 없습니다. 지금 바로 예매하실 수 있습니다.'
-      : e.response?.data?.message || '대기 등록에 실패했습니다.'
+    waitErr.value =
+      e.response?.status === 401
+        ? '로그인이 필요합니다.'
+        : e.response?.data?.detail || e.response?.data?.message || '대기 등록에 실패했습니다.'
   } finally {
     waiting.value = false
   }
 }
+
 </script>
 
 <style scoped>
@@ -371,6 +451,27 @@ async function joinWaitlist() {
 }
 
 .acts { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+.ov {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(14,17,22,.55);
+  display: grid; place-items: center;
+  padding: 20px;
+}
+.pop {
+  width: 100%; max-width: 360px;
+  background: #fff; border-radius: var(--r-lg);
+  padding: 26px 24px 22px;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: var(--shadow-up);
+  text-align: center;
+}
+.pop-h { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; }
+.pop-h.none { color: var(--t2); font-weight: 700; }
+.pop-seat { font-size: 15px; color: var(--t1); }
+.pop-seat b { font-weight: 800; }
+.pop-sub { font-size: 12.5px; color: var(--t3); margin-bottom: 6px; }
+.pop .btn { margin-top: 4px; }
 
 @media (max-width: 980px) {
   .split { grid-template-columns: 1fr; }
