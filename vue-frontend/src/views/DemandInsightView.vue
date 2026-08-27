@@ -25,6 +25,7 @@
       <div v-else-if="loading" class="load"><span class="spin"></span>분석하는 중입니다</div>
 
       <template v-else-if="a && isMine">
+        <!-- 서버가 응답하면(aiEnabled 가 false 여도 폴백 계산 결과) 이 안내는 뜨지 않는다 -->
         <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
           AI 서비스가 아직 예측을 제공하지 않아 <b>대기·판매 데이터 기반 임시 추정치</b>로 표시하고 있습니다.
           <code>GET /api/recommend/forecast/{{ course.id }}</code> 가 실제 결과를 돌려주면 그대로 대체됩니다.
@@ -38,7 +39,7 @@
             <div class="tgt-b">
               <div class="tgt-p"><PosterArt :id="course.id" :title="course.title" :genre="genre" /></div>
               <div>
-                <p class="tgt-n">{{ course.title }}</p>
+                <p class="tgt-n">{{ a.courseTitle || course.title }}</p>
                 <p class="tgt-m">{{ firstLine }}</p>
               </div>
             </div>
@@ -160,6 +161,7 @@
                 <div><dt>예상 판매율</dt><dd class="num">{{ (simResult.expectedRate * 100).toFixed(1) }}%</dd></div>
                 <div><dt>현재 유효수요 중 예상 전환율</dt><dd class="num">{{ (simResult.conversionRate * 100).toFixed(1) }}%</dd></div>
               </dl>
+              <p v-if="simResult.comment" class="s-o-c">{{ simResult.comment }}</p>
               <p class="s-o-v"><span class="bdg bdg-ai">{{ simResult.verdict.label }}</span></p>
             </div>
           </article>
@@ -261,7 +263,11 @@ onMounted(async () => {
 async function runSim() {
   simming.value = true
   try {
-    simResult.value = await forecastApi.simulate(course.value, a.value, { seats: sim.seats })
+    simResult.value = await forecastApi.simulate(course.value, a.value, {
+      date: sim.date,
+      time: sim.time,
+      capacity: sim.seats
+    })
   } finally {
     simming.value = false
   }
@@ -346,6 +352,11 @@ async function runSim() {
 .s-o-d > div { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .s-o-d dt { font-size: 11.5px; color: var(--t2); }
 .s-o-d dd { font-size: 13px; font-weight: 700; }
+.s-o-c {
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--ai-line);
+  font-size: 12.5px; color: var(--t2); line-height: 1.6;
+}
 .s-o-v { margin-top: 10px; text-align: center; }
 
 /* 하단 */
