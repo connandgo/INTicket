@@ -5,6 +5,7 @@
 // 데모 모드를 끄면 그대로 진짜 서버를 부른다.
 
 import { read, write, nextId } from './db.js'
+import { parseWish } from '@/lib/wishParser.js'
 
 const ok = (config, data, status = 200) => ({
   data: { success: true, message: '성공', data },
@@ -67,14 +68,19 @@ function mockParse(text) {
   const preferred = {}
   const flexible = {}
 
+  // 매수는 화면이 쓰는 파서에 맡긴다. 여기서 숫자만 찾으면
+  // '둘이서', '혼자' 같은 한글 수량을 못 읽어 늘 1매가 된다.
+  const local = parseWish(text || '')
+  if (local.quantity) required.count = local.quantity
   const q = t.match(/(\d+)\s*(명|장|매|자리|석)/)
   if (q) required.count = Number(q[1])
   const price = t.match(/(\d+)\s*만\s*원?\s*(이하|아래|까지)/)
   if (price) required.max_price = Number(price[1]) * 10000
 
-  const g = ['VIP', 'R', 'S', 'A'].filter((x) => new RegExp(`${x}\\s*석`, 'i').test(text))
+  const g = local.statedGrades?.length
+    ? local.statedGrades
+    : ['VIP', 'R', 'S', 'A'].filter((x) => new RegExp(`${x}\\s*석`, 'i').test(text))
   if (g.length) (/무조건|반드시|꼭/.test(t) ? required : preferred).grade = g
-  else if (/앞자리|앞쪽|가까운|무대/.test(t)) preferred.grade = ['VIP', 'R']
 
   if (/붙어|나란히|연석|같이 앉/.test(t)) preferred.row = 'same'
   if (/떨어져|따로 앉|나눠 앉/.test(t)) flexible.allow_split = true
@@ -174,7 +180,12 @@ export default async function mockAdapter(config) {
     )
     if (dup) return fail(config, '이미 수강신청한 강의입니다')
 
-    if (soldOut(course)) {
+    // 취소표를 배정받아 수락한 사람은 매진이어도 그 자리를 살 수 있다.
+    // 이 검사가 없으면 매칭 팝업에서 결제로 넘어간 뒤 '방금 매진되었습니다'로 막힌다.
+    const accepted = (db.offers || []).some(
+      (o) => o.userId === me.id && o.courseId === course.id && o.status === 'ACCEPTED'
+    )
+    if (!accepted && soldOut(course)) {
       return fail(config, '매진된 공연입니다. 취소표 대기 등록을 이용해 주세요')
     }
 
@@ -320,21 +331,13 @@ export default async function mockAdapter(config) {
     if (!me) return fail(config, '인증이 필요합니다', 401)
     const o = (db.offers || []).find((x) => x.offerId === m[1] && x.userId === me.id)
     if (!o) return raw(config, { success: false, message: '제안을 찾을 수 없습니다.' })
+    // 수락은 '이 좌석을 잡겠다'까지다. 예매는 결제 화면에서 만들어진다.
+    // 여기서 미리 만들면 결제 단계가 '이미 예매하신 공연입니다'로 막힌다.
     o.status = 'ACCEPTED'
-    db.enrollments.push({
-      id: nextId(db, 'enrollment'),
-      userId: me.id,
-      courseId: o.courseId,
-      status: 'ACTIVE',
-      createdAt: new Date().toISOString(),
-      course: null
-    })
-    const c = db.courses.find((x) => x.id === o.courseId)
-    if (c) c.enrollmentCount += 1
     const w = db.waitlist.find((x) => x.userId === me.id && x.courseId === o.courseId)
     if (w) w.status = 'MATCHED'
     write(db)
-    return raw(config, { success: true, message: `${o.seatsText} 좌석으로 예매되었습니다.` })
+    return raw(config, { success: true, message: `${o.seatsText} 좌석을 확보했습니다. 결제를 진행해 주세요.` })
   }
 
   if (url === '/api/recommend/internal/released' && method === 'post') {
@@ -344,22 +347,33 @@ export default async function mockAdapter(config) {
       .sort((a, b) => a.seq - b.seq)[0]
     if (!next) return raw(config, { matched: 0, offers: [], reason: '조건에 맞는 대기자가 없습니다.', mode: 'NONE' })
 
+    // 풀린 좌석을 전부 주면 안 된다. 화면은 조건에 맞는 등급을 통째로 풀기 때문에
+    // 그대로 넘기면 한 사람에게 200석이 배정된 것처럼 보인다.
+    // 실제 서버처럼 요청한 매수만큼만, 되도록 붙은 자리로 잘라 준다.
+    const want = Math.max(1, Number(next.parsed?.required?.count) || 1)
+    const picked = seats.slice(0, want)
+    if (!picked.length) {
+      return raw(config, { matched: 0, offers: [], reason: '배정할 좌석이 없습니다.', mode: 'NONE' })
+    }
+
     db.offers ||= []
     const offer = {
       offerId: `of-${Date.now()}`,
       userId: next.userId,
       courseId: next.courseId,
-      seats,
-      seatsText: seats.join(', '),
-      message: `요청하신 조건에 맞는 ${seats.join(', ')} 좌석이 나왔습니다.`,
+      seats: picked,
+      seatsText: picked.join(', '),
+      message: `요청하신 조건에 맞는 ${picked.join(', ')} 좌석이 나왔습니다.`,
       reason: `대기 ${next.seq}번, 요청 조건과 좌석 등급·매수가 일치해 우선 배정했습니다.`,
-      expiresAt: Date.now() / 1000 + 600,
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
       status: 'PENDING'
     }
     db.offers.push(offer)
+    next.status = 'MATCHED'
     write(db)
     return raw(config, { matched: 1, offers: [offer], reason: offer.reason, mode: 'SINGLE' })
   }
+
 
   /* ---------- 추천 (FastAPI, 래퍼 없음) ---------- */
   m = url.match(/^\/api\/recommend\/(\d+)$/)
