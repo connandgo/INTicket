@@ -254,6 +254,71 @@ SEED_WAITERS_BY_COURSE = {
 }
 
 
+# ---------------------------------------------------------------------------
+# 나머지 공연 대기자
+#
+# 시드가 공연 1, 2 에만 있어서 다른 공연은 수요 분석이 전부 0 으로 나왔다.
+# 매진된 공연에 대기자가 한 명도 없는 화면은 설명이 안 된다.
+#
+# 대기자 수는 판매율에서 만든다. 매진일수록 못 산 사람이 많이 남는다.
+# 문장은 아래 표에서 돌려 쓰고 파싱 결과를 함께 박아 둔다.
+# 시드 단계에서 LLM 을 부르지 않으려는 것이다(느리고 결과가 흔들린다).
+# ---------------------------------------------------------------------------
+
+# (정원, 판매) — course-service /api/courses 기준
+OTHER_COURSES = {
+    3: (250, 250),
+    4: (200, 143),
+    5: (180, 61),
+    6: (500, 500),
+    7: (400, 212),
+    8: (220, 219),
+    9: (300, 47),
+}
+
+PATTERNS = [
+    ("혼자 가는데 자리만 나면 어디든 좋아요.", {"count": 1}, {}, {}),
+    ("둘이 같이 갈 건데 붙어 앉고 싶어요.", {"count": 2}, {"consecutive": True}, {}),
+    ("S석으로 한 자리만 부탁드립니다.", {"grade": ["S"], "count": 1}, {}, {}),
+    ("R석이면 좋겠는데 예산은 15만원까지예요.",
+     {"count": 1}, {"grade": ["R"]}, {"price_ceiling": 150000}),
+    ("가족 세 명이서 갑니다. 정 안 되면 나눠 앉아도 괜찮아요.",
+     {"count": 3}, {}, {"allow_split": True, "max_split_gap": 3}),
+    ("앞쪽 자리면 좋겠어요. 뒤쪽이면 안 갈래요.", {"grade": ["VIP", "R"], "count": 1}, {}, {}),
+    ("A석 두 장이요. 저렴한 자리면 됩니다.", {"grade": ["A"], "count": 2}, {}, {}),
+    ("네 명인데 같은 열로 붙여 주세요.", {"count": 4}, {"consecutive": True}, {}),
+]
+
+
+def _waiter_count(capacity: int, sold: int) -> int:
+    """판매율에서 대기자 수를 만든다. 매진이면 정원의 절반쯤이 대기로 남는다."""
+    rate = sold / capacity if capacity else 0
+    if rate >= 1:
+        return round(capacity * 0.5)
+    return max(2, round(capacity * rate * 0.08))
+
+
+def load_other_courses() -> int:
+    """공연 3~9 의 대기자를 판매율에 맞춰 주입한다."""
+    total = 0
+    user_id = 1000
+    for course_id, (capacity, sold) in OTHER_COURSES.items():
+        count = _waiter_count(capacity, sold)
+        for i in range(count):
+            raw, required, preferred, flexible = PATTERNS[i % len(PATTERNS)]
+            store.add_waiter(
+                user_id=user_id,
+                course_id=course_id,
+                raw_text=raw,
+                parsed={"required": required, "preferred": preferred, "flexible": flexible},
+                seq=i + 1,
+            )
+            user_id += 1
+        total += count
+        logger.info(f"[Seed] 대기자 {count}명 주입 - courseId: {course_id}")
+    return total
+
+
 def load_seed() -> int:
     """시드 대기자를 저장소에 주입하고 총 주입 건수를 반환.
 
@@ -271,7 +336,7 @@ def load_seed() -> int:
             )
         total += len(entries)
         logger.info(f"[Seed] 대기자 {len(entries)}명 주입 - courseId: {course_id}")
-    return total
+    return total + load_other_courses()
 
 
 def reset_to_seed() -> int:

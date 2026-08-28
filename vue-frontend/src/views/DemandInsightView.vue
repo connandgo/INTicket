@@ -25,7 +25,9 @@
 
       <template v-else-if="a && isMine">
         <!-- 서버가 응답하면(aiEnabled 가 false 여도 폴백 계산 결과) 이 안내는 뜨지 않는다 -->
-        <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
+        <!-- 내장 데이터로 도는 중에는 띄우지 않는다. 비교할 서버가 아예 없어서
+             '분석 대상에 등록되지 않았다'는 말이 사실과 다르다. -->
+        <p v-if="!DEMO && a.source !== 'AI_SERVICE'" class="alert alert-info src">
           이 공연은 아직 분석 대상에 등록되지 않아
           <b>대기·판매 데이터로 계산한 추정치</b>를 보여드립니다.
         </p>
@@ -223,6 +225,7 @@ import PosterArt from '@/components/PosterArt.vue'
 import DemandTrendChart from '@/components/DemandTrendChart.vue'
 import { useCourseStore } from '@/store/course.js'
 import { forecastApi } from '@/api/forecast.js'
+import { DEMO } from '@/config/features.js'
 import { performanceApi } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
 import { useAuthStore } from '@/store/auth.js'
