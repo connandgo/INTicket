@@ -19,13 +19,29 @@
       <section v-if="mode === 'login'" class="pane">
         <!-- 데모 모드: 백엔드 없이 계정만 골라 들어간다 -->
         <template v-if="DEMO">
-          <p class="alert alert-info">
-            원하는 역할의 계정을 선택해 바로 둘러보세요.
-          </p>
           <p v-if="auth.isAuthenticated" class="alert alert-ok">
             지금 <b>{{ auth.user?.name }}</b>({{ auth.user?.role === 'INSTRUCTOR' ? '공연기획사' : '관람객' }})으로
-            로그인되어 있습니다. 아래에서 다른 계정을 고르면 바뀝니다.
+            로그인되어 있습니다.
           </p>
+
+          <form class="form" @submit.prevent="signIn">
+            <div class="fld">
+              <label class="flabel" for="l-email">이메일</label>
+              <input id="l-email" v-model.trim="login.email" type="email" class="inp"
+                     placeholder="user@example.com" autocomplete="username" required />
+            </div>
+            <div class="fld">
+              <label class="flabel" for="l-pw">비밀번호</label>
+              <input id="l-pw" v-model="login.password" type="password" class="inp"
+                     placeholder="비밀번호" autocomplete="current-password" required />
+            </div>
+            <p v-if="err" class="alert alert-err">{{ err }}</p>
+            <button class="btn btn-red btn-lg btn-wide" :disabled="signing">
+              <span v-if="signing" class="spin spin-w"></span>{{ signing ? '로그인 중' : '로그인' }}
+            </button>
+          </form>
+
+          <p class="or"><span>또는 계정 선택</span></p>
           <ul class="accts">
             <li v-for="u in accounts" :key="u.id">
               <button class="acct" @click="enter(u.email)">
@@ -38,7 +54,6 @@
               </button>
             </li>
           </ul>
-          <p v-if="err" class="alert alert-err">{{ err }}</p>
           <p class="fhint center">새 계정이 필요하면 <button class="lk" @click="mode = 'join'">회원가입</button></p>
         </template>
 
@@ -123,6 +138,23 @@ const err = ref('')
 const ok = ref('')
 const form = ref({ name: '', email: '', password: '', role: 'STUDENT' })
 
+// 백엔드 없이 실행할 때의 로그인. 가입할 때 정한 비밀번호로 들어간다.
+const login = ref({ email: '', password: '' })
+const signing = ref(false)
+
+async function signIn() {
+  signing.value = true
+  err.value = ''
+  try {
+    await auth.demoLoginWithPassword(login.value.email, login.value.password)
+    router.push('/courses')
+  } catch (e) {
+    err.value = e.message || '로그인하지 못했습니다.'
+  } finally {
+    signing.value = false
+  }
+}
+
 async function join() {
   err.value = ''
   ok.value = ''
@@ -131,6 +163,8 @@ async function join() {
     await authApi.register(form.value)
     ok.value = '가입이 완료되었습니다. 로그인해 주세요.'
     const joined = form.value.email
+    // 방금 정한 값을 로그인 칸에 채워 둔다. 다시 타이핑하게 할 이유가 없다.
+    login.value = { email: joined, password: form.value.password }
     form.value = { name: '', email: '', password: '', role: form.value.role }
     setTimeout(() => {
       accounts.value = auth.demoUsers()
@@ -148,6 +182,22 @@ async function join() {
 </script>
 
 <style scoped>
+/* 로그인 폼과 계정 선택을 가르는 구분선 */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 14px;
+  color: var(--t4);
+  font-size: 12px;
+}
+.or::before, .or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 .page-wrap { min-height: 100vh; background: var(--bg-soft); }
 .bar { background: #fff; border-bottom: 1px solid var(--line); }
 .bar-in { height: 58px; display: flex; align-items: center; justify-content: space-between; }

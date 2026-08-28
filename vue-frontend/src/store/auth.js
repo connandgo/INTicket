@@ -76,6 +76,17 @@ export const useAuthStore = defineStore('auth', () => {
     return found
   }
 
+  // 이메일·비밀번호로 로그인한다. 백엔드가 없을 때 쓰는 경로다.
+  async function demoLoginWithPassword(email, password) {
+    const found = readDemoDb().users.find((u) => u.email === email)
+    if (!found || (found.password || '') !== password) {
+      throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
+    }
+    setToken(`demo.${found.id}.${Date.now()}`)
+    setUser(found)
+    return found
+  }
+
   function demoUsers() {
     return DEMO ? readDemoDb().users : []
   }
@@ -161,6 +172,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     demoLogin,
+    demoLoginWithPassword,
     demoUsers,
     clearSession,
     fullLogout,

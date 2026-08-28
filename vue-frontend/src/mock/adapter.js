@@ -102,11 +102,22 @@ export default async function mockAdapter(config) {
       email: body.email,
       name: body.name,
       role: body.role || 'STUDENT',
+      // 가입할 때 정한 비밀번호로 그대로 로그인할 수 있어야 한다
+      password: body.password || '',
       createdAt: new Date().toISOString()
     }
     db.users.push(user)
     write(db)
     return ok(config, user, 201)
+  }
+
+  // 이메일·비밀번호 로그인
+  if (url === '/api/users/login' && method === 'post') {
+    const user = db.users.find((u) => u.email === body.email)
+    if (!user || (user.password || '') !== (body.password || '')) {
+      return fail(config, '이메일 또는 비밀번호가 올바르지 않습니다')
+    }
+    return ok(config, user)
   }
 
   if (url === '/api/users/me' && method === 'get') {

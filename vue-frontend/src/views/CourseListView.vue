@@ -42,7 +42,7 @@
       </div>
 
       <p v-if="store.isShowcase" class="preview small">
-        지금은 <b>둘러보기</b>입니다. 로그인하시면 실시간 잔여 좌석과 예매가 가능합니다.
+        로그인하시면 실시간 잔여 좌석 확인과 예매가 가능합니다.
         <router-link to="/login" class="p-lk">로그인</router-link>
       </p>
 
