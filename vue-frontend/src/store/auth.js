@@ -93,42 +93,29 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 진짜 로그아웃. 인증 서버 세션까지 끊는다.
   //
-  // 인증 서버의 /connect/logout 이 세션을 확실히 끊어 주는지 확인할 수 없었고,
-  // 세션 쿠키(JSESSIONID)는 HttpOnly 라 브라우저 JS 로도 못 지운다.
+  // 표준 OIDC RP-Initiated Logout — 브라우저를 인증 서버의 /connect/logout으로
+  // 통째로 이동시킨다. 세션 쿠키는 인증 서버가 직접 만료시켜 응답에 실어 주고,
+  // 끊은 뒤에는 post_logout_redirect_uri로 알아서 돌려보내 준다.
   //
-  // 다행히 그 쿠키는 Domain 없이 host(localhost)에 심겨서 포트가 달라도
-  // 우리 dev 서버로 함께 전송된다. 그래서 dev 서버가 만료 헤더를 내려주는
-  // /kill-session 을 불러 브라우저가 쿠키를 지우게 한다(vite.config.js 참고).
-  //
-  // 그다음 표준 OIDC 로그아웃도 함께 호출해 서버 쪽 세션도 정리한다.
-  async function fullLogout() {
+  // AUTH_SERVER_URL(api-edge, :8080)로 절대경로를 쓰는 이유: 게이트웨이에는
+  // /connect/** 라우트가 없어 상대경로(fetch)로 보내면 401이 난다. api-edge가
+  // /connect/**를 인증 서버로 직접 프록시하도록 라우트를 따로 뒀다(infra/api-edge.conf).
+  function fullLogout() {
     const hint = idToken.value
     clearSession()
 
-    // 1) 브라우저가 들고 있는 인증 서버 세션 쿠키를 지운다 (확실한 쪽)
-    try {
-      await fetch('/kill-session', { credentials: 'include', cache: 'no-store' })
-    } catch (e) {
-      console.warn('[auth] 세션 쿠키 삭제 실패:', e)
+    if (!hint) {
+      // id_token이 없으면(예전 세션 등) 되돌아올 방법이 없다. 세션만 끊고
+      // 인증 서버 로그아웃 화면에 맡긴다.
+      window.location.href = `${AUTH_SERVER_URL}/logout`
+      return
     }
 
-    // 2) 서버 쪽 세션도 정리한다. 실패해도 1) 만으로 재로그인 시 폼이 뜬다.
-    if (hint) {
-      const params = new URLSearchParams({
-        id_token_hint: hint,
-        post_logout_redirect_uri: POST_LOGOUT_URI
-      })
-      try {
-        await fetch(`/connect/logout?${params.toString()}`, {
-          credentials: 'include',
-          redirect: 'manual'
-        })
-      } catch (e) {
-        console.warn('[auth] OIDC 로그아웃 호출 실패:', e)
-      }
-    }
-
-    window.location.href = '/'
+    const params = new URLSearchParams({
+      id_token_hint: hint,
+      post_logout_redirect_uri: POST_LOGOUT_URI
+    })
+    window.location.href = `${AUTH_SERVER_URL}/connect/logout?${params.toString()}`
   }
 
   // OAuth2 Authorization Code Flow
