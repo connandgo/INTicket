@@ -20,6 +20,7 @@
 
         <ul class="hero-tiles" aria-hidden="true">
           <li v-for="(g, i) in GENRES" :key="g.code" :class="'tile t' + i">
+            <img :src="GENRE_ART[g.code]" alt="" />
             <span>{{ g.label }}</span>
           </li>
         </ul>
@@ -35,6 +36,7 @@
         class="qk-i"
         @click="pick(g.code)"
       >
+        <img class="qk-img" :src="GENRE_ART[g.code]" alt="" />
         <span class="qk-l">{{ g.label }}</span>
         <span class="qk-a">›</span>
       </router-link>
@@ -78,6 +80,19 @@ import { useAuthStore } from '@/store/auth.js'
 import { useCourseStore } from '@/store/course.js'
 import { GENRES } from '@/domain/genre.js'
 
+// 장르마다 대표 공연 사진을 하나씩 붙인다. 글자만 있으면 무슨 공연인지 안 보인다.
+import musicalArt from '@/assets/posters/course-1-phantom.webp'
+import playArt from '@/assets/posters/course-6-midsummer.webp'
+import concertArt from '@/assets/posters/course-4-first-light.webp'
+import classicArt from '@/assets/posters/course-3-resurrection.webp'
+
+const GENRE_ART = {
+  BACKEND: musicalArt,
+  FRONTEND: playArt,
+  DEVOPS: concertArt,
+  DATA_SCIENCE: classicArt
+}
+
 const auth = useAuthStore()
 const store = useCourseStore()
 
@@ -104,6 +119,7 @@ onMounted(() => store.fetchCourses())
 /* 장식용 포스터 타일 */
 .hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tile {
+  position: relative;
   aspect-ratio: 3 / 4;
   border-radius: var(--r);
   display: grid;
@@ -111,8 +127,18 @@ onMounted(() => store.fetchCourses())
   padding: 10px;
   font-size: 12.5px;
   font-weight: 700;
-  color: rgba(255,255,255,.85);
+  color: #fff;
+  overflow: hidden;
 }
+.tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* 사진 위 글자가 묻히지 않게 아래쪽만 어둡게 깐다 */
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,.12) 58%, transparent);
+}
+.tile span { position: relative; z-index: 1; }
 .t0 { background: linear-gradient(160deg,#7A1F2B,#B33A49); }
 .t1 { background: linear-gradient(160deg,#123B33,#276B5C); }
 .t2 { background: linear-gradient(160deg,#3A2352,#61407F); }
@@ -120,14 +146,20 @@ onMounted(() => store.fetchCourses())
 
 .qk { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 34px auto 46px; }
 .qk-i {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   transition: border-color .15s var(--ease), background .15s var(--ease);
 }
 .qk-i:hover { border-color: var(--red); background: var(--red-wash); }
-.qk-l { font-size: 15px; font-weight: 700; letter-spacing: -0.04em; }
+.qk-img {
+  width: 44px; height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
+}
+.qk-l { font-size: 15px; font-weight: 700; letter-spacing: -0.04em; flex: 1; }
 .qk-a { color: var(--t4); font-size: 17px; }
 
 .rank { padding-bottom: 70px; }

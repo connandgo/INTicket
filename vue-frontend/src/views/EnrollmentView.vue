@@ -203,9 +203,7 @@ async function doCancel(e) {
     if (err.response?.status === 403) {
       cancelErr.value = '본인의 예매만 취소할 수 있습니다.'
     } else if (isNotDeployed(err)) {
-      cancelErr.value =
-        '이 서버에는 아직 예매 취소 기능이 배포되지 않았습니다. ' +
-        '백엔드 컨테이너를 최신 소스로 다시 빌드해야 동작합니다.'
+      cancelErr.value = '예매를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.'
     } else {
       cancelErr.value = err.response?.data?.message || '예매를 취소하지 못했습니다.'
     }

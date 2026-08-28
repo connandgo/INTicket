@@ -4,7 +4,8 @@
 // 공연·예매·사용자를 브라우저에 들고 있는다. DB 스키마는 건드리지 않는다.
 // 실제 서버가 붙으면 이 파일은 아예 쓰이지 않는다.
 
-const KEY = 'inticket.demo.v1'
+// v2: 사용자에 비밀번호가 생겼다. v1 저장값에는 없어서 로그인이 되지 않는다.
+const KEY = 'inticket.demo.v2'
 
 function seed() {
   // capacity 가 null 이면 정원 무제한. 숫자면 enrollmentCount 가 그 값에 닿는 순간 매진.
@@ -16,8 +17,8 @@ function seed() {
 
   return {
     users: [
-      { id: 1, email: 'viewer@demo.com', name: '김관람', role: 'STUDENT', createdAt: new Date().toISOString() },
-      { id: 2, email: 'promoter@demo.com', name: '한기획', role: 'INSTRUCTOR', createdAt: new Date().toISOString() }
+      { id: 1, email: 'viewer@demo.com', name: '김관람', role: 'STUDENT', password: 'inticket1234', createdAt: new Date().toISOString() },
+      { id: 2, email: 'promoter@demo.com', name: '한기획', role: 'INSTRUCTOR', password: 'inticket1234', createdAt: new Date().toISOString() }
     ],
     courses: [
       mk(1, '뮤지컬 오페라의 유령', 'BACKEND', 150000, 842,
