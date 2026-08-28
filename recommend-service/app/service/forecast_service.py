@@ -10,6 +10,7 @@ import logging
 from app.config.settings import settings
 from app.data.demand_history import HISTORY_RATIOS
 from app.data.forecast_const import DAY_LABELS, DEFAULT_SLOT_WEIGHT, FORECAST_COURSES, SLOT_WEIGHT
+from app.client.course_client import course_client
 from app.service import ai_forecast_service
 from app.store import waitlist_store as store
 
@@ -107,9 +108,33 @@ def _momentum_state(change_rate: float) -> tuple[str, str, str]:
     return "FLAT", "보합", "보합 예상"
 
 
+async def _live_profile(course_id: int) -> dict:
+    """공연 제목·정원·예매수를 course-service 에서 읽는다.
+
+    상수 표에 박아 두면 실제 예매가 늘어난 뒤부터 값이 어긋난다. 목록에는
+    '2석 남음'인데 수요 분석은 매진이라고 말하는 일이 생긴다.
+    조회에 실패하면 상수 표로 돌아간다(장애 격리).
+    """
+    fallback = get_course_profile(course_id)
+    try:
+        for course in await course_client.get_all_courses():
+            if course.id != course_id:
+                continue
+            # 정원이 없는 공연은 매진이 없다. 분석은 한 회차 정원을 기준으로 한다.
+            capacity = course.capacity or fallback["capacity"]
+            return {
+                "title": course.title,
+                "capacity": capacity,
+                "sold": min(course.enrollmentCount, capacity),
+            }
+    except Exception as error:  # noqa: BLE001 - 조회 실패는 분석을 막지 않는다
+        logger.warning("[Forecast] 공연 정보 조회 실패 - 상수 표를 사용합니다: %s", error)
+    return fallback
+
+
 async def build_forecast(course_id: int) -> dict:
     """공연 하나의 B2B 수요 분석 결과를 조립한다."""
-    profile = get_course_profile(course_id)
+    profile = await _live_profile(course_id)
     capacity = profile["capacity"]
     sold = min(profile["sold"], capacity)
     waiters = store.get_waiters(course_id)

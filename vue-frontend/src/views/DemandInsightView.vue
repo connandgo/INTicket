@@ -85,16 +85,23 @@
           <!-- ② 추가 회차 전환수요 -->
           <article class="card metric m-blue">
             <h2 class="m-t"><span class="m-n">②</span> 추가 회차 전환수요 예측</h2>
-            <p class="m-l">추천 회차 (AI)</p>
-            <p class="m-v">
+            <!-- 아직 자리가 남은 공연은 추가 회차를 권할 상황이 아니다.
+                 대기 수요가 거의 없어 예상 관객이 몇 석으로 나오는데,
+                 그걸 '추천 회차'라고 내걸면 앞뒤가 맞지 않는다. -->
+            <p class="m-l">{{ needsExtraShow ? '추천 회차 (AI)' : '추가 회차 검토' }}</p>
+            <p v-if="needsExtraShow" class="m-v">
               <b>{{ a.extraShow.recommended.weekday }}요일</b>
               <span class="num rec-t">{{ a.extraShow.recommended.time }}</span>
               <span class="bdg bdg-blue m-b">추천</span>
             </p>
+            <p v-else class="m-v"><b>현 회차로 충분</b></p>
             <dl class="m-d">
-              <div><dt>예상 판매량</dt><dd class="num">{{ a.extraShow.expectedAudience.toLocaleString() }} / {{ a.extraShow.expectedSeats.toLocaleString() }}석</dd></div>
+              <div><dt>{{ needsExtraShow ? '예상 판매량' : '현 회차 잔여' }}</dt><dd class="num">
+                <template v-if="needsExtraShow">{{ a.extraShow.expectedAudience.toLocaleString() }} / {{ a.extraShow.expectedSeats.toLocaleString() }}석</template>
+                <template v-else>{{ seatsLeft.toLocaleString() }}석</template>
+              </dd></div>
               <div><dt>예상 판매율</dt><dd class="num">{{ Math.round(a.extraShow.expectedRate * 100) }}%</dd></div>
-              <div><dt>AI 판단</dt><dd class="verdict">{{ a.extraShow.verdict.label }}</dd></div>
+              <div><dt>AI 판단</dt><dd class="verdict">{{ needsExtraShow ? a.extraShow.verdict.label : '편성 불필요' }}</dd></div>
             </dl>
             <p class="m-f">＊ 현재 미충족 수요가 해당 회차에 전환될 확률</p>
           </article>
@@ -249,6 +256,21 @@ const TIMES = ['14:00', '15:00', '17:00', '19:00', '19:30', '20:00']
 const sim = reactive({ date: '', time: '19:00', seats: 1000 })
 const simResult = ref(null)
 const simming = ref(false)
+
+// 판매율이 이 아래면 아직 팔 자리가 남았다고 본다.
+// 추가 회차는 살 사람이 있는데 자리가 없을 때 검토하는 것이다.
+const EXTRA_SHOW_THRESHOLD = 0.92
+
+const seatsLeft = computed(() =>
+  Math.max(0, (a.value?.target?.capacity || 0) - (a.value?.target?.sold || 0))
+)
+
+const needsExtraShow = computed(() => {
+  const t = a.value?.target
+  if (!t) return false
+  if (t.soldOut) return true
+  return (t.sellRate ?? 0) >= EXTRA_SHOW_THRESHOLD
+})
 
 onMounted(async () => {
   await store.fetchCourse(route.params.id)

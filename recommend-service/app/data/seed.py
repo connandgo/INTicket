@@ -291,11 +291,21 @@ PATTERNS = [
 
 
 def _waiter_count(capacity: int, sold: int) -> int:
-    """판매율에서 대기자 수를 만든다. 매진이면 정원의 절반쯤이 대기로 남는다."""
-    rate = sold / capacity if capacity else 0
-    if rate >= 1:
-        return round(capacity * 0.5)
-    return max(2, round(capacity * rate * 0.08))
+    """판매율에서 대기자 수를 만든다.
+
+    대기자는 거의 다 팔린 뒤부터 급격히 쌓인다. 자리가 남아 있으면 굳이
+    대기를 걸지 않는다. 그래서 판매율을 6제곱해 곡선을 세운다.
+
+    분석은 대기자 수에서 추가 회차 예상 관객을 만드는데(유효수요의 절반),
+    대기자가 적으면 매진 공연인데도 추가 회차 예상이 몇 석으로 떨어진다.
+    매진이면 정원의 1.4배가 대기로 남는 것으로 잡아 그 구간을 메운다.
+
+      정원 250 매진      → 350명  → 추가 회차 예상 판매율 약 80%
+      정원 220 · 219석 판매 → 300명  → 거의 매진이라 대기가 많다
+      정원 300 ·  47석 판매 →   2명  → 자리가 남아 대기가 없다
+    """
+    rate = min(1.0, sold / capacity) if capacity else 0
+    return max(2, round(capacity * 1.4 * (rate ** 6)))
 
 
 def load_other_courses() -> int:
