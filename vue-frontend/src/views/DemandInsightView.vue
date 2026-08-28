@@ -282,10 +282,15 @@ onMounted(async () => {
   try {
     const sales = await performanceApi.sales(course.value)
     if (sales?.length) {
+      const mapSeats = sales.reduce((t, r) => t + r.capacity, 0)
+      // 전체 좌석·판매는 공연 정보(백엔드 기준)를 먼저 쓴다. 좌석 배치도 합계를 쓰면
+      // 정원 300석 공연이 1,560석으로 잡혀 백엔드가 있을 때와 다른 숫자가 나온다.
+      // 추가 회차 좌석 수만 배치도의 한 회차분을 쓴다.
+      const capacity = Number(course.value.capacity) || mapSeats
       stock = {
-        capacity: sales.reduce((t, r) => t + r.capacity, 0),
-        sold: sales.reduce((t, r) => t + r.sold, 0),
-        roundSeats: Math.round(sales.reduce((t, r) => t + r.capacity, 0) / sales.length)
+        capacity,
+        sold: Math.min(Number(course.value.enrollmentCount) || sales.reduce((t, r) => t + r.sold, 0), capacity),
+        roundSeats: Math.round(mapSeats / sales.length)
       }
     }
   } catch (e) {

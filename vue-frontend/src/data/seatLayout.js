@@ -50,8 +50,24 @@ export function fromServerMap(seatMap) {
  * 자리를 골라 준다(S석 요청 → S 좌석, 3매 연석 요청 → 붙은 세 자리).
  */
 export function allSeatIds() {
+  return seatIdsOfGrades(GRADE_ORDER)
+}
+
+/**
+ * 지정한 등급들의 좌석 ID 목록.
+ *
+ * 서버는 required(하드 조건)만 후보 필터로 쓴다. '~면 좋겠어요' 처럼 말하면
+ * LLM 이 등급을 preferred 로 분류하고, 그러면 서버는 남은 자리 중 제일 좋은
+ * 자리부터 준다 — 곧 VIP 다. 무엇을 적든 VIP 가 나오는 이유가 이것이다.
+ *
+ * 그래서 화면이 조건에 나온 등급만 푼다. 하드 조건이 아니어도 그 사람이 원한
+ * 등급 안에서 자리가 정해진다. 등급을 말하지 않았으면 전 등급을 푼다.
+ */
+export function seatIdsOfGrades(grades) {
+  const wanted = (grades || []).filter((g) => SEAT_GRADES[g])
+  const list = wanted.length ? wanted : GRADE_ORDER
   const seats = []
-  for (const grade of GRADE_ORDER) {
+  for (const grade of list) {
     const rows = SEAT_GRADES[grade]?.rows || {}
     for (const [row, n] of Object.entries(rows)) {
       for (let i = 1; i <= n; i++) seats.push(`${grade}-${row}-${i}`)

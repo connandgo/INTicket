@@ -240,7 +240,7 @@ async function releaseTicket(round) {
       return
     }
 
-    await matchingDemoApi.release(c.value.id, pickReleasedSeats(), 'DEADLINE_BATCH')
+    await matchingDemoApi.release(c.value.id, pickReleasedSeats(registered), 'DEADLINE_BATCH')
     // 서버가 배분을 끝낼 시간을 준다
     await new Promise((r) => setTimeout(r, 1200))
 

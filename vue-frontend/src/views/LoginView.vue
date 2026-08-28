@@ -9,7 +9,19 @@
       </div>
     </header>
 
-    <main class="box">
+    <main class="content">
+      <aside class="login-side">
+        <p class="side-kicker">INTICKET MEMBERSHIP</p>
+        <h1>보고 싶은 무대를<br />놓치지 마세요</h1>
+        <p class="side-copy">예매와 취소표 대기, 결제 내역을 하나의 계정으로 관리합니다.</p>
+        <ul>
+          <li>좌석 등급별 실시간 잔여 확인</li>
+          <li>10분 좌석 선점과 안전한 결제</li>
+          <li>매진 공연 취소표 자동 매칭</li>
+        </ul>
+      </aside>
+
+      <div class="box">
       <div class="tabs">
         <button class="tab" :class="{ on: mode === 'login' }" @click="mode = 'login'">로그인</button>
         <button class="tab" :class="{ on: mode === 'join' }" @click="mode = 'join'">회원가입</button>
@@ -106,6 +118,7 @@
         </form>
         <p class="fhint center">이미 계정이 있으신가요? <button class="lk" @click="mode = 'login'">로그인</button></p>
       </section>
+      </div>
     </main>
   </div>
 </template>
@@ -182,6 +195,42 @@ async function join() {
 </script>
 
 <style scoped>
+/* 8080 인증 서버 로그인 화면(infra/auth-login.css)과 같은 구성.
+   백엔드가 있을 때와 없을 때 로그인 화면이 달라 보이지 않게 맞춘다. */
+.content {
+  width: min(860px, 100%);
+  min-height: 520px;
+  margin: 48px auto;
+  display: grid;
+  grid-template-columns: 38% 62%;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(90deg, #1b2536 0, #1b2536 38%, #fff 38%);
+  box-shadow: 0 14px 38px rgba(27, 37, 54, .16);
+}
+.login-side {
+  padding: 58px 34px;
+  color: #fff;
+  background: radial-gradient(circle at 80% 75%, rgba(229,51,75,.25), transparent 38%);
+}
+.side-kicker { margin: 0 0 14px; color: #ff93a1; font-size: 10px; font-weight: 700; letter-spacing: .15em; }
+.login-side h1 { margin: 0; font-size: 27px; line-height: 1.35; letter-spacing: -.05em; }
+.side-copy { margin: 14px 0 34px; color: rgba(255,255,255,.63); font-size: 12.5px; line-height: 1.75; }
+.login-side ul { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; color: rgba(255,255,255,.72); font-size: 11.5px; }
+.login-side li { position: relative; padding-left: 13px; }
+.login-side li::before {
+  content: ''; position: absolute; left: 0; top: 8px;
+  width: 4px; height: 4px; border-radius: 50%; background: #ff93a1;
+}
+
+/* 좁은 화면에서는 좌측 패널을 접는다 */
+@media (max-width: 720px) {
+  .content { grid-template-columns: 1fr; background: #fff; margin: 20px auto; }
+  .login-side { display: none; }
+}
+
 /* 로그인 폼과 계정 선택을 가르는 구분선 */
 .or {
   display: flex;
@@ -209,13 +258,13 @@ async function join() {
 }
 .logo-tx { font-size: 19px; font-weight: 800; letter-spacing: -0.05em; color: var(--navy); }
 
+/* 좌우 2단 안에 들어가므로 자체 테두리·여백은 두지 않는다 */
 .box {
-  max-width: 440px;
-  margin: 46px auto 90px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  overflow: hidden;
+  align-self: center;
+  width: min(380px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 34px 0;
+  background: transparent;
 }
 .tabs { margin-bottom: 0; overflow: visible; }
 .tab { flex: 1; text-align: center; padding: 14px 0; }
