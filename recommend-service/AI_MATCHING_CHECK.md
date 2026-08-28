@@ -340,7 +340,7 @@ LLM 사용 가능 여부:
 
 - LLM 설정 자체는 활성 상태로 인식됨
 - OpenAI API가 `429 Too Many Requests`를 반환
-- 조건 파싱은 `PARSE_FALLBACK`으로 전환
+- 조건 파싱은 규칙 폴백으로 전환
 - 단건 수락가능성 평가는 전원 `0.5` 폴백 점수로 전환
 - 그래도 매칭 API는 500 없이 정상 응답
 
@@ -350,12 +350,14 @@ LLM 사용 가능 여부:
 [AI] LLM 호출 실패 - 폴백 사용: HTTPStatusError: Client error '429 Too Many Requests'
 ```
 
-조건 파싱 폴백 결과:
+조건 파싱 폴백 결과는 문장에 명시된 등급·인원을 보존한다. 예를 들어
+`R석 두개 찾아줘`는 다음처럼 저장된다.
 
 ```json
 {
   "required": {
-    "count": 1
+    "count": 2,
+    "grade": ["R"]
   },
   "preferred": {},
   "flexible": {}

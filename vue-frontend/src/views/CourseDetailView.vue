@@ -175,8 +175,8 @@ import { performanceApi, remaining } from '@/api/performance.js'
 import { genreLabel } from '@/domain/genre.js'
 import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity } from '@/domain/soldout.js'
 import { HOLD_MINUTES } from '@/config/features.js'
-import { seatWishApi, matchingDemoApi, wantedGrades, gradesFromText } from '@/api/seatWish.js'
-import { seatIdsOfGrades } from '@/data/seatLayout.js'
+import { seatWishApi, matchingDemoApi } from '@/api/seatWish.js'
+import { releasedSeatsForCourse } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -265,13 +265,9 @@ async function releaseTicket(round) {
 
 // 취소가 나서 풀리는 좌석.
 //
-// 등급 하나만 풀면 조건에 뭘 적었든 모두 그 등급을 받는다. 그래서 매번 같은
-// 좌석이 나왔다. 전 등급을 풀어야 서버가 각자의 조건에 맞는 자리를 고른다.
-function pickReleasedSeats(registered) {
-  // 서버 LLM 이 실패하면 조건이 {count: 1} 로만 온다. 그때는 원문에서
-  // 등급을 직접 읽어야 적은 대로 자리가 나온다.
-  const grades = wantedGrades(registered?.parsed)
-  return seatIdsOfGrades(grades.length ? grades : gradesFromText(registered?.rawText))
+// 공연별로 미리 정한 취소 좌석 묶음을 발생시킨다.
+function pickReleasedSeats() {
+  return releasedSeatsForCourse(c.value.id)
 }
 
 function totalLeft(r) {

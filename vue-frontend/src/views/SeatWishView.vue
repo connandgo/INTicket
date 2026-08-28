@@ -132,9 +132,9 @@ import AppHeader from '@/components/AppHeader.vue'
 import SeatMap from '@/components/SeatMap.vue'
 import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
-import { seatWishApi, matchingDemoApi, seatsLabel, wantedGrades, gradesFromText } from '@/api/seatWish.js'
+import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
-import { seatIdsOfGrades } from '@/data/seatLayout.js'
+import { releasedSeatsForCourse } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -184,20 +184,10 @@ async function runMatching() {
 
 // 취소가 나서 풀리는 좌석.
 //
-// 등급 하나만 풀면 조건에 뭘 적었든 모두 그 등급을 받는다. 그래서 매번 같은
-// 좌석이 나왔다. 전 등급을 풀어야 서버가 각자의 조건에 맞는 자리를 고른다.
-//   'S석으로 한 자리'      → S-G-1
-//   'A석 두 장'           → A-K-1, A-K-2
-//   '세 명이서 붙어 앉기'   → 연속된 세 자리
-// 어느 자리를 받을지는 서버가 정한다. 화면은 조건을 보내고 결과만 받는다.
+// 공연별로 미리 정한 취소 좌석 묶음을 발생시킨다.
+// 실제 서비스에서는 결제 취소 이벤트가 이 자리를 대신 넘긴다.
 function pickSeats() {
-  // 사람이 실제로 말한 등급만 쓴다. wish.grades 는 미언급 시 전 등급을
-  // 채워 넣는 기본값이라 그걸 쓰면 늘 VIP 가 나간다.
-  //
-  // 서버 LLM 이 실패해 조건이 {count: 1} 로만 오는 경우가 있어서, 그때는
-  // 원문에서 등급을 직접 읽는다. 그래야 적은 대로 자리가 나온다.
-  const grades = wantedGrades(registered.value?.parsed)
-  return seatIdsOfGrades(grades.length ? grades : gradesFromText(text.value))
+  return releasedSeatsForCourse(route.params.id)
 }
 
 async function goPay() {
