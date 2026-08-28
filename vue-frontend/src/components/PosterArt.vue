@@ -51,7 +51,29 @@ const POSTERS = {
   7: pianoPoster
 }
 
-const posterSrc = computed(() => POSTERS[String(props.id)] || '')
+// 제목으로 먼저 찾는다.
+//
+// id 로만 찾으면 백엔드 없이 실행할 때 엉뚱한 포스터가 붙는다. 내장 카탈로그와
+// DB 의 공연 id 가 다르기 때문이다(예: 콘서트에 한여름 밤의 꿈 포스터).
+// 제목은 어느 쪽에서 받아오든 같으므로 이쪽을 우선한다. id 매핑은 그대로 남겨
+// 제목이 바뀐 경우의 대비로 쓴다.
+const BY_TITLE = [
+  [/오페라의\s*유령/, phantomPoster],
+  [/고도를\s*기다리며/, waitingPoster],
+  [/부활|말러/, resurrectionPoster],
+  [/FIRST\s*LIGHT/i, firstLightPoster],
+  [/레미제라블/, barricadePoster],
+  [/한여름\s*밤의\s*꿈/, midsummerPoster],
+  [/베토벤|피아노\s*협주곡/, pianoPoster]
+]
+
+const posterSrc = computed(() => {
+  const t = String(props.title || '')
+  for (const [re, src] of BY_TITLE) {
+    if (re.test(t)) return src
+  }
+  return POSTERS[String(props.id)] || ''
+})
 const pair = computed(() => PALETTE[Math.abs(Number(props.id) || 0) % PALETTE.length])
 const style = computed(() => ({
   background: `linear-gradient(160deg, ${pair.value[0]} 0%, ${pair.value[1]} 100%)`

@@ -26,7 +26,8 @@
       <template v-else-if="a && isMine">
         <!-- 서버가 응답하면(aiEnabled 가 false 여도 폴백 계산 결과) 이 안내는 뜨지 않는다 -->
         <p v-if="a.source !== 'AI_SERVICE'" class="alert alert-info src">
-          <b>대기·판매 데이터</b>를 기준으로 산출한 결과입니다.
+          이 공연은 아직 분석 대상에 등록되지 않아
+          <b>대기·판매 데이터로 계산한 추정치</b>를 보여드립니다.
         </p>
 
         <!-- 상단 4칸 -->
@@ -37,7 +38,9 @@
             <div class="tgt-b">
               <div class="tgt-p"><PosterArt :id="course.id" :title="course.title" :genre="genre" /></div>
               <div>
-                <p class="tgt-n">{{ a.courseTitle || course.title }}</p>
+                <!-- 서버 프로필의 title 은 데모용 이름이라 목록의 공연명과 다르다.
+                     수치는 서버 것을 쓰되 공연명은 화면이 아는 이름으로 부른다. -->
+                <p class="tgt-n">{{ course.title }}</p>
                 <p class="tgt-m">{{ firstLine }}</p>
               </div>
             </div>
