@@ -42,6 +42,24 @@ export function fromServerMap(seatMap) {
   return Object.keys(out).length ? out : null
 }
 
+/**
+ * 전 등급·전 열의 좌석 ID 목록.
+ *
+ * 취소표 발생 시연에서 쓴다. 한 등급만 풀면 조건에 뭘 적었든 모두 그 등급을
+ * 받게 되어 결과가 늘 같아 보인다. 전 등급을 풀어야 서버가 각자의 조건에 맞는
+ * 자리를 골라 준다(S석 요청 → S 좌석, 3매 연석 요청 → 붙은 세 자리).
+ */
+export function allSeatIds() {
+  const seats = []
+  for (const grade of GRADE_ORDER) {
+    const rows = SEAT_GRADES[grade]?.rows || {}
+    for (const [row, n] of Object.entries(rows)) {
+      for (let i = 1; i <= n; i++) seats.push(`${grade}-${row}-${i}`)
+    }
+  }
+  return seats
+}
+
 /** 좌석 ID → { grade, row, no } */
 export function parseSeatId(seatId) {
   const p = String(seatId).split('-')
