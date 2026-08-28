@@ -107,6 +107,10 @@ export function parseWish(text) {
 
   return {
     quantity,
+    // 사람이 실제로 말한 등급. 아무 말도 없으면 빈 배열이다.
+    // grades 는 화면 표시용이라 미언급 시 전 등급을 채우는데, 그 값을 좌석
+    // 릴리즈에 쓰면 전 등급이 풀려 늘 제일 좋은 자리(VIP)가 나간다.
+    statedGrades: [...grades],
     grades: grades.length ? grades : [...GRADES],
     maxPrice,
     together,

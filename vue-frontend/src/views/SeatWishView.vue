@@ -132,7 +132,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import SeatMap from '@/components/SeatMap.vue'
 import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
-import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
+import { seatWishApi, matchingDemoApi, seatsLabel, wantedGrades, gradesFromText } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
 import { seatIdsOfGrades } from '@/data/seatLayout.js'
 
@@ -191,9 +191,13 @@ async function runMatching() {
 //   '세 명이서 붙어 앉기'   → 연속된 세 자리
 // 어느 자리를 받을지는 서버가 정한다. 화면은 조건을 보내고 결과만 받는다.
 function pickSeats() {
-  // wish.grades 는 required 와 preferred 의 등급을 합친 것이다.
-  // 등급을 말하지 않았으면 비어 있고, 그때만 전 등급을 푼다.
-  return seatIdsOfGrades(wish.value?.grades)
+  // 사람이 실제로 말한 등급만 쓴다. wish.grades 는 미언급 시 전 등급을
+  // 채워 넣는 기본값이라 그걸 쓰면 늘 VIP 가 나간다.
+  //
+  // 서버 LLM 이 실패해 조건이 {count: 1} 로만 오는 경우가 있어서, 그때는
+  // 원문에서 등급을 직접 읽는다. 그래야 적은 대로 자리가 나온다.
+  const grades = wantedGrades(registered.value?.parsed)
+  return seatIdsOfGrades(grades.length ? grades : gradesFromText(text.value))
 }
 
 async function goPay() {

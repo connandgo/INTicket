@@ -1,5 +1,6 @@
 import api from './index.js'
 import * as local from '@/lib/wishParser.js'
+import { SEAT_GRADES, GRADE_ORDER } from '@/data/seatLayout.js'
 
 // AI 취소표 매칭 (recommend-service).
 //
@@ -99,6 +100,51 @@ function toWish(parsed) {
     together: rowWanted ? true : f.allow_split === true ? false : null,
     frontPreferred: null,
     centerPreferred: null
+  }
+}
+
+/**
+ * 조건에 실제로 나온 좌석 등급.
+ *
+ * toWish 의 grades 는 등급을 말하지 않으면 전 등급을 채워 넣는다(화면 표시용
+ * 기본값). 그걸 그대로 릴리즈에 쓰면 전 등급이 풀리고, 서버는 남은 자리 중
+ * 제일 좋은 곳부터 주므로 무엇을 적든 VIP 가 나온다.
+ * 여기서는 사람이 실제로 말한 등급만 뽑는다. 없으면 빈 배열이다.
+ *
+ * 등급 대신 가격 상한만 말한 경우(예: 15만원 이하)는 그 값으로 등급을 좁힌다.
+ */
+export function wantedGrades(parsed) {
+  const pick = (obj) => {
+    const g = obj?.grade
+    if (!g) return []
+    return Array.isArray(g) ? g : [g]
+  }
+  const named = [...new Set([...pick(parsed?.required), ...pick(parsed?.preferred)])]
+  if (named.length) return named
+
+  const cap =
+    parsed?.required?.max_price ??
+    parsed?.preferred?.max_price ??
+    parsed?.flexible?.price_ceiling
+  if (cap) {
+    const affordable = GRADE_ORDER.filter((g) => SEAT_GRADES[g].price <= Number(cap))
+    if (affordable.length) return affordable
+  }
+  return []
+}
+
+/**
+ * 서버 파싱이 비었을 때 원문에서 등급을 직접 읽는다.
+ *
+ * LLM 호출이 실패하면(예: OpenAI 429) 서버는 폴백으로 {count: 1} 만 돌려준다.
+ * 그러면 등급 조건이 사라져 무엇을 적든 제일 좋은 자리가 나간다.
+ * 화면에 이미 규칙 기반 파서가 있으니 그걸로 등급만 메운다.
+ */
+export function gradesFromText(text) {
+  try {
+    return local.parseWish(text || '').statedGrades || []
+  } catch {
+    return []
   }
 }
 
