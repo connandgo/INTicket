@@ -12,7 +12,7 @@ import { seatsLeft } from '@/domain/soldout.js'
 
 // v3: 배치도 총 좌석을 공연 정원에 맞추기 시작했다.
 // 이전 저장값은 공연과 무관하게 1,560석이라 목록의 잔여석과 어긋난다.
-const KEY = 'inticket.inventory.v3'
+const KEY = 'inticket.inventory.v4'
 
 // 등급·가격·정원은 서버 좌석 배치도(seats.py)를 그대로 따른다.
 // 공연 가격에서 배수로 계산하면 AI 가 배정하는 좌석의 등급·가격과 어긋난다.
@@ -39,41 +39,16 @@ function save(db) {
   }
 }
 
-const ROUNDS_PER_COURSE = 3
-
-/** 배치도 총 좌석(3회차분)을 공연 정원에 맞추는 비율. 정원이 없으면 1 */
-function scaleFor(course) {
-  const cap = Number(course?.capacity)
-  if (!Number.isFinite(cap) || cap <= 0) return 1
-  const full = GRADE_PRESET.reduce((t, g) => t + g.capacity, 0) * ROUNDS_PER_COURSE
-  return Math.min(1, cap / full)
-}
-
-/** 열별 좌석 수를 비율만큼 줄인다. 열은 남기되 최소 1석은 둔다 */
-function scaleRows(rows, scale) {
-  if (scale >= 1) return { ...rows }
-  const out = {}
-  for (const [row, n] of Object.entries(rows)) {
-    out[row] = Math.max(1, Math.round(n * scale))
-  }
-  return out
-}
+// 좌석 배치도는 서버 SEAT_MAP 과 같은 크기(회차당 520석)를 유지한다.
+// 정원에 맞춰 줄여 봤더니 열마다 네 자리씩 남는 옹졸한 표가 됐고, 취소표
+// 매칭이 배정하는 S-Q-5 같은 좌석이 배치도에 없는 자리가 됐다.
+// 화면에 보이는 '잔여'는 fitToCourseStock 이 실제 정원에 맞춰 준다.
 
 // 공연 하나당 회차 3개를 만들어 둔다. 같은 공연은 항상 같은 회차가 나온다.
 function seedFor(course) {
   const base = new Date('2026-09-11T00:00:00')
   const offset = (Number(course.id) * 3) % 21
   const WD = ['일', '월', '화', '수', '목', '금', '토']
-
-  // 좌석 배치도의 총 좌석 수를 공연 정원에 맞춘다.
-  //
-  // 배치도는 공연과 무관하게 회차당 520석(3회차 1,560석)을 그렸다. 그런데 정원
-  // 300석짜리 공연에 1,560석을 그리면, 목록은 '2석 남음'인데 배치도에는 자리가
-  // 넘쳐 보이고 수요 분석은 또 다른 좌석 수를 말한다. 같은 공연을 두고 화면마다
-  // 숫자가 달라진다.
-  //
-  // 정원이 없는 공연(무제한)은 배치도를 그대로 둔다.
-  const seatScale = scaleFor(course)
 
   const rounds = [0, 2, 3].map((d, i) => {
     const dt = new Date(base)
@@ -85,8 +60,8 @@ function seedFor(course) {
       weekday: WD[dt.getDay()],
       time,
       grades: GRADE_PRESET.map((g, gi) => {
-        const rows = scaleRows(g.rows, seatScale)
-        const capacity = Object.values(rows).reduce((t, n) => t + n, 0)
+        const rows = { ...g.rows }
+        const capacity = g.capacity
         // 회차마다, 등급마다 팔린 정도가 달라야 판매 현황이 의미 있게 보인다.
         // 앞등급일수록 그리고 주말 회차일수록 더 팔린 것으로 잡았다.
         const seed = (Number(course.id) * 31 + i * 17 + gi * 7) % 60
