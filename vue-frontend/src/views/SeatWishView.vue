@@ -134,7 +134,7 @@ import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
-import { SEAT_GRADES } from '@/data/seatLayout.js'
+import { allSeatIds } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,20 +182,16 @@ async function runMatching() {
   }
 }
 
-// 풀리는 좌석을 만든다.
+// 취소가 나서 풀리는 좌석.
 //
-// 한 석만 풀면 앞순번 대기자 한 명에게만 가고 끝난다. 시드에 대기자가 90명 있어서
-// 뒤에 신청한 사람은 아무리 눌러도 배정될 수 없다. 그래서 마감 직전 미결제분이
-// 한꺼번에 취소되는 상황(DEADLINE_BATCH)으로 해당 등급 좌석을 통째로 푼다.
-// 서버는 이 모드에서 만족 인원을 최대화하므로 뒷순번까지 배정이 내려간다.
+// 등급 하나만 풀면 조건에 뭘 적었든 모두 그 등급을 받는다. 그래서 매번 같은
+// 좌석이 나왔다. 전 등급을 풀어야 서버가 각자의 조건에 맞는 자리를 고른다.
+//   'S석으로 한 자리'      → S-G-1
+//   'A석 두 장'           → A-K-1, A-K-2
+//   '세 명이서 붙어 앉기'   → 연속된 세 자리
+// 어느 자리를 받을지는 서버가 정한다. 화면은 조건을 보내고 결과만 받는다.
 function pickSeats() {
-  const g = wish.value?.grades?.[0] || 'S'
-  const rows = SEAT_GRADES[g]?.rows || SEAT_GRADES.S.rows
-  const seats = []
-  for (const [row, n] of Object.entries(rows)) {
-    for (let i = 1; i <= n; i++) seats.push(`${g}-${row}-${i}`)
-  }
-  return seats
+  return allSeatIds()
 }
 
 async function goPay() {
