@@ -134,7 +134,7 @@ import { useCourseStore } from '@/store/course.js'
 import { performanceApi, remaining } from '@/api/performance.js'
 import { seatWishApi, matchingDemoApi, seatsLabel } from '@/api/seatWish.js'
 import { isSoldOut } from '@/domain/soldout.js'
-import { allSeatIds } from '@/data/seatLayout.js'
+import { seatIdsOfGrades } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -191,7 +191,9 @@ async function runMatching() {
 //   '세 명이서 붙어 앉기'   → 연속된 세 자리
 // 어느 자리를 받을지는 서버가 정한다. 화면은 조건을 보내고 결과만 받는다.
 function pickSeats() {
-  return allSeatIds()
+  // wish.grades 는 required 와 preferred 의 등급을 합친 것이다.
+  // 등급을 말하지 않았으면 비어 있고, 그때만 전 등급을 푼다.
+  return seatIdsOfGrades(wish.value?.grades)
 }
 
 async function goPay() {

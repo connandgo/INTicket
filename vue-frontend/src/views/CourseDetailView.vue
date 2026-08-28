@@ -176,7 +176,7 @@ import { genreLabel } from '@/domain/genre.js'
 import { isSoldOut, isAlmostGone, seatsLeft, hasCapacity } from '@/domain/soldout.js'
 import { HOLD_MINUTES } from '@/config/features.js'
 import { seatWishApi, matchingDemoApi } from '@/api/seatWish.js'
-import { allSeatIds } from '@/data/seatLayout.js'
+import { seatIdsOfGrades } from '@/data/seatLayout.js'
 
 const route = useRoute()
 const store = useCourseStore()
@@ -240,7 +240,7 @@ async function releaseTicket(round) {
       return
     }
 
-    await matchingDemoApi.release(c.value.id, pickReleasedSeats(), 'DEADLINE_BATCH')
+    await matchingDemoApi.release(c.value.id, pickReleasedSeats(registered.wish), 'DEADLINE_BATCH')
     // 서버가 배분을 끝낼 시간을 준다
     await new Promise((r) => setTimeout(r, 1200))
 
@@ -267,8 +267,8 @@ async function releaseTicket(round) {
 //
 // 등급 하나만 풀면 조건에 뭘 적었든 모두 그 등급을 받는다. 그래서 매번 같은
 // 좌석이 나왔다. 전 등급을 풀어야 서버가 각자의 조건에 맞는 자리를 고른다.
-function pickReleasedSeats() {
-  return allSeatIds()
+function pickReleasedSeats(wish) {
+  return seatIdsOfGrades(wish?.grades)
 }
 
 function totalLeft(r) {
