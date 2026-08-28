@@ -33,6 +33,10 @@
               <div><dt>장르</dt><dd>{{ label }}</dd></div>
               <div><dt>기준가</dt><dd><b class="price num">{{ price }}원</b> <span class="small muted">R석 1매 기준</span></dd></div>
               <div><dt>누적 예매</dt><dd class="num">{{ (c.enrollmentCount || 0).toLocaleString() }}건</dd></div>
+              <div v-if="hasCap">
+                <dt>전체 좌석</dt>
+                <dd class="num">{{ Number(c.capacity).toLocaleString() }}석</dd>
+              </div>
               <div v-if="rounds.length">
                 <dt>전체 회차 잔여</dt>
                 <dd>
