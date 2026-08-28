@@ -24,6 +24,8 @@ class CourseResponse(BaseModel):
     price: Decimal
     instructorId: int
     enrollmentCount: int
+    # 정원. null 이면 무제한이라 매진이 없다(course-service Course.isSoldOut 과 같은 규칙)
+    capacity: Optional[int] = None
     status: str
     createdAt: Optional[datetime] = None
 
