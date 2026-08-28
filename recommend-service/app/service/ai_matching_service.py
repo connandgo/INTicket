@@ -183,11 +183,63 @@ BATCH_USER_TEMPLATE = """풀린 좌석: {seats_text}
 
 # ---------------------------------------------------------------------------
 
-# 파싱 완전 실패 시 폴백. 조건 없이 1석 대기로 간주한다(가장 안전한 최소 가정).
+# 파싱 완전 실패 시 최소 폴백. 실제 폴백 경로에서는 아래 fallback_parse_condition으로
+# 문장에 명시된 등급·인원도 보존한다.
 PARSE_FALLBACK = {"required": {"count": 1}, "preferred": {}, "flexible": {}}
 
 # 수락가능성 폴백값. 전원 같은 값이면 결국 순번만으로 결정된다.
 ACCEPTANCE_FALLBACK_SCORE = 0.5
+
+# LLM 호출이 막혔을 때도 가장 중요한 하드 조건은 잃지 않기 위한 최소 규칙이다.
+# "R석 두개"처럼 명확한 요청이 조건 없이 1석으로 저장되면 다른 등급 좌석이
+# 배정될 수 있으므로, 이 경우만큼은 LLM 없이도 결정적으로 읽어 낸다.
+_KOREAN_COUNT = {
+    "한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5,
+    "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9, "열": 10,
+}
+_COUNT_UNIT_PATTERN = r"(?:명|매|장|개|석|연석)"
+
+
+def _fallback_count(text: str) -> int:
+    """LLM 없이 문장에 직접 적힌 인원만 읽는다."""
+    numeric = re.search(rf"(\d+)\s*{_COUNT_UNIT_PATTERN}", text)
+    if numeric:
+        return max(1, int(numeric.group(1)))
+
+    korean = re.search(rf"({'|'.join(_KOREAN_COUNT)})\s*{_COUNT_UNIT_PATTERN}", text)
+    if korean:
+        return _KOREAN_COUNT[korean.group(1)]
+
+    if "둘이" in text:
+        return 2
+    if "셋이" in text or "세명이" in text:
+        return 3
+    if "넷이" in text or "네명이" in text:
+        return 4
+    return DEFAULT_COUNT
+
+
+def fallback_parse_condition(text: str) -> dict:
+    """LLM 실패 시 명시적인 등급·인원·분리 허용만 보존하는 파서.
+
+    선호의 뉘앙스까지 추측하지 않는다. 대신 사용자가 확실히 말한 R석, 2장 같은
+    하드 조건을 지켜서 엉뚱한 등급으로 매칭되는 것을 막는다.
+    """
+    required = {"count": _fallback_count(text)}
+    grades = []
+    if re.search(r"VIP(?:\s*(?:등급|석))?", text, re.IGNORECASE):
+        grades.append("VIP")
+    for grade in ("R", "S", "A"):
+        if re.search(rf"(?<![A-Za-z]){grade}\s*(?:등급|석)", text, re.IGNORECASE):
+            grades.append(grade)
+    if grades:
+        required["grade"] = grades
+
+    flexible = {}
+    if any(phrase in text for phrase in ("떨어져 앉", "나눠 앉", "따로 앉")):
+        flexible = {"allow_split": True, "max_split_gap": DEFAULT_SPLIT_GAP}
+
+    return {"required": required, "preferred": {}, "flexible": flexible}
 
 
 def fallback_message(seats: List[str]) -> str:
@@ -411,7 +463,7 @@ def normalize_parsed(raw: dict) -> dict:
 async def parse_condition(text: str) -> dict:
     """① 자연어 조건을 필수/선호/양보가능 3단계로 분류한다.
 
-    폴백: {"required": {"count": 1}, "preferred": {}, "flexible": {}}
+    폴백: 문장에 직접 적힌 등급·인원·분리 허용은 규칙으로 보존한다.
     """
     if not text or not text.strip():
         return dict(PARSE_FALLBACK)
@@ -421,13 +473,17 @@ async def parse_condition(text: str) -> dict:
         PARSE_USER_TEMPLATE.format(text=text.strip()),
     )
     if content is None:
-        return dict(PARSE_FALLBACK)
+        result = fallback_parse_condition(text.strip())
+        logger.info(f"[AI] 조건 파싱 LLM 폴백 - required: {result['required']}")
+        return result
 
     try:
         parsed = json.loads(strip_fence(content))
     except (json.JSONDecodeError, TypeError) as e:
         logger.warning(f"[AI] 조건 파싱 JSON 디코드 실패 - 폴백 사용: {e}")
-        return dict(PARSE_FALLBACK)
+        result = fallback_parse_condition(text.strip())
+        logger.info(f"[AI] 조건 파싱 규칙 폴백 - required: {result['required']}")
+        return result
 
     result = normalize_parsed(parsed)
     logger.info(f"[AI] 조건 파싱 완료 - required: {result['required']}")
